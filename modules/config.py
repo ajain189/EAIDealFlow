@@ -13,7 +13,17 @@ DEFAULT_CONFIG = {
         "revenue_min": 2_000_000,
         "revenue_max": 10_000_000,
         "peer_threshold": 5,
-        "margin_threshold": 15
+        "margin_threshold": 15,
+        "weights": {
+            "base": 50,
+            "revenue_bonus": 25,
+            "peer_bonus": 15,
+            "margin_bonus": 10
+        },
+        "label_thresholds": {
+            "low_max": 50,
+            "medium_max": 75
+        }
     },
     "peer_filtering": {
         "use_custom_range": False,

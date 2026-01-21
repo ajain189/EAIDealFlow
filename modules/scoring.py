@@ -15,11 +15,11 @@ def calculate_deal_heat(
     """
     Calculate Deal Heat score (0-100).
 
-    Scoring:
-    - Base: 50 points
-    - +25 if revenue in sweet spot (configurable, default $2M-$10M)
-    - +15 if peer count >= threshold (configurable, default 5)
-    - +10 if median EBITDA margin >= threshold (configurable, default 15%)
+    Scoring (all configurable):
+    - Base: configurable points (default 50)
+    - Revenue bonus if in sweet spot (default +25, range $2M-$10M)
+    - Peer bonus if count >= threshold (default +15, threshold 5)
+    - Margin bonus if margin >= threshold (default +10, threshold 15%)
 
     Args:
         revenue: Target company revenue in dollars
@@ -39,44 +39,84 @@ def calculate_deal_heat(
     peer_thresh = dh.get('peer_threshold', 5)
     margin_thresh = dh.get('margin_threshold', 15)
 
-    score = 50  # Base score
+    # Get configurable weights
+    weights = dh.get('weights', {})
+    base_weight = weights.get('base', 50)
+    revenue_weight = weights.get('revenue_bonus', 25)
+    peer_weight = weights.get('peer_bonus', 15)
+    margin_weight = weights.get('margin_bonus', 10)
 
-    # Revenue sweet spot bonus (+25)
+    score = base_weight
+
+    # Revenue sweet spot bonus
     if rev_min <= revenue <= rev_max:
-        score += 25
+        score += revenue_weight
 
-    # Peer group density bonus (+15)
+    # Peer group density bonus
     if peer_count >= peer_thresh:
-        score += 15
+        score += peer_weight
 
-    # Margin health bonus (+10)
+    # Margin health bonus
     if median_ebitda_margin and median_ebitda_margin >= margin_thresh:
-        score += 10
+        score += margin_weight
 
     return min(score, 100)
 
 
-def get_heat_color(score: int) -> str:
+def get_heat_color(score: int, config: dict = None) -> str:
     """
-    Return color hex based on score.
+    Return color hex based on score with configurable thresholds.
 
+    Default thresholds:
     - Red (#ef4444): score < 50 (Low)
     - Yellow/Amber (#f59e0b): 50 <= score < 75 (Medium)
     - Green/Emerald (#10b981): score >= 75 (High)
+
+    Args:
+        score: The deal heat score
+        config: Optional config dict, will load from file if not provided
+
+    Returns:
+        Hex color string
     """
-    if score < 50:
+    if config is None:
+        config = load_config()
+
+    dh = config.get('deal_heat', {})
+    thresholds = dh.get('label_thresholds', {})
+    low_max = thresholds.get('low_max', 50)
+    medium_max = thresholds.get('medium_max', 75)
+
+    if score < low_max:
         return "#ef4444"  # Red
-    elif score < 75:
+    elif score < medium_max:
         return "#f59e0b"  # Yellow/Amber
     else:
         return "#10b981"  # Green/Emerald
 
 
-def get_heat_label(score: int) -> str:
-    """Return text label for score range."""
-    if score < 50:
+def get_heat_label(score: int, config: dict = None) -> str:
+    """
+    Return text label for score range with configurable thresholds.
+
+    Args:
+        score: The deal heat score
+        config: Optional config dict, will load from file if not provided
+
+    Returns:
+        Label string ("Low", "Medium", or "High")
+    """
+    if config is None:
+        config = load_config()
+
+    dh = config.get('deal_heat', {})
+    thresholds = dh.get('label_thresholds', {})
+    low_max = thresholds.get('low_max', 50)
+    medium_max = thresholds.get('medium_max', 75)
+
+    if score < low_max:
         return "Low"
-    elif score < 75:
+    elif score < medium_max:
         return "Medium"
     else:
         return "High"
@@ -92,12 +132,13 @@ def get_score_breakdown(
     Get detailed breakdown of score components.
 
     Returns dict with:
-    - base: Base score (always 50)
-    - revenue_bonus: 0 or 25
-    - peer_bonus: 0 or 15
-    - margin_bonus: 0 or 10
+    - base: Base score (configurable, default 50)
+    - revenue_bonus: 0 or configured weight (default 25)
+    - peer_bonus: 0 or configured weight (default 15)
+    - margin_bonus: 0 or configured weight (default 10)
     - total: Final score
     - details: Human-readable explanations
+    - weights: The configured weights used
     """
     if config is None:
         config = load_config()
@@ -108,31 +149,48 @@ def get_score_breakdown(
     peer_thresh = dh.get('peer_threshold', 5)
     margin_thresh = dh.get('margin_threshold', 15)
 
+    # Get configurable weights
+    weights = dh.get('weights', {})
+    base_weight = weights.get('base', 50)
+    revenue_weight = weights.get('revenue_bonus', 25)
+    peer_weight = weights.get('peer_bonus', 15)
+    margin_weight = weights.get('margin_bonus', 10)
+
     breakdown = {
-        'base': 50,
+        'base': base_weight,
         'revenue_bonus': 0,
         'peer_bonus': 0,
         'margin_bonus': 0,
-        'details': []
+        'details': [],
+        'weights': {
+            'base': base_weight,
+            'revenue_bonus': revenue_weight,
+            'peer_bonus': peer_weight,
+            'margin_bonus': margin_weight
+        }
     }
 
     # Revenue check
     if rev_min <= revenue <= rev_max:
-        breakdown['revenue_bonus'] = 25
-        breakdown['details'].append(f"Revenue ${revenue:,.0f} is in sweet spot (${rev_min/1e6:.1f}M-${rev_max/1e6:.1f}M)")
+        breakdown['revenue_bonus'] = revenue_weight
+        rev_min_m = rev_min / 1e6
+        rev_max_m = rev_max / 1e6
+        breakdown['details'].append(
+            f"Revenue ${revenue:,.0f} is in sweet spot (${rev_min_m:.1f}M-${rev_max_m:.1f}M)"
+        )
     else:
         breakdown['details'].append(f"Revenue ${revenue:,.0f} is outside sweet spot")
 
     # Peer count check
     if peer_count >= peer_thresh:
-        breakdown['peer_bonus'] = 15
+        breakdown['peer_bonus'] = peer_weight
         breakdown['details'].append(f"{peer_count} peers found (threshold: {peer_thresh})")
     else:
         breakdown['details'].append(f"Only {peer_count} peers found (need {peer_thresh}+)")
 
     # Margin check
     if median_ebitda_margin and median_ebitda_margin >= margin_thresh:
-        breakdown['margin_bonus'] = 10
+        breakdown['margin_bonus'] = margin_weight
         breakdown['details'].append(f"Median margin {median_ebitda_margin:.1f}% meets threshold ({margin_thresh}%)")
     else:
         margin_str = f"{median_ebitda_margin:.1f}%" if median_ebitda_margin else "N/A"
