@@ -87,7 +87,7 @@ def scrape_website_summary(url: str) -> str:
 2. Key services or products offered
 3. Any hints about ownership, company size, or employee count
 
-Return as brief bullet points. Be concise. If you cannot access the site or find the information, return an empty response."""
+Return as brief bullet points. Be concise. If you cannot access the site, return an empty response."""
 
     result = _call_with_retry(prompt)
     return result.strip() if result else ""
@@ -99,7 +99,7 @@ TONE_TEMPLATES = {
         'style': 'formal, professional, respectful, and measured',
         'greeting': 'Dear',
         'sign_off': 'Best regards',
-        'characteristics': 'Use complete sentences, proper titles, and maintain a respectful distance. Avoid contractions.'
+        'characteristics': 'Use complete sentences, proper titles, respectful distance. No contractions.'
     },
     'friendly': {
         'style': 'warm, personable, conversational yet professional',
@@ -158,9 +158,15 @@ BODY:
     result = _call_with_retry(prompt)
     if result:
         return _parse_email(result)
+    fallback_body = (
+        f'{t["greeting"]} [Owner],\n\n'
+        f'I am reaching out regarding {company}. Our team has been analyzing the '
+        f'{industry} sector and identified your company as a potential fit for our '
+        f'investment thesis.\n\n{t["sign_off"]},\n[Your Name]\nEAI Capital'
+    )
     return {
-        'subject': f'Introduction - EAI Capital',
-        'body': f'{t["greeting"]} [Owner],\n\nI am reaching out regarding {company}. Our team has been analyzing the {industry} sector and identified your company as a potential fit for our investment thesis.\n\n{t["sign_off"]},\n[Your Name]\nEAI Capital'
+        'subject': 'Introduction - EAI Capital',
+        'body': fallback_body
     }
 
 
@@ -194,9 +200,16 @@ BODY:
     result = _call_with_retry(prompt)
     if result:
         return _parse_email(result)
+    fallback_body = (
+        f'{t["greeting"]} [Owner],\n\n'
+        f'Following up on my previous note. I have prepared a one-page valuation '
+        f'snapshot for {company}, benchmarking your business against recent '
+        f'comparable transactions in the market.\n\n'
+        f'Please find it attached.\n\n{t["sign_off"]},\n[Your Name]'
+    )
     return {
         'subject': f'Valuation Snapshot for {company}',
-        'body': f'{t["greeting"]} [Owner],\n\nFollowing up on my previous note. I have prepared a one-page valuation snapshot for {company}, benchmarking your business against recent comparable transactions in the market.\n\nPlease find it attached.\n\n{t["sign_off"]},\n[Your Name]'
+        'body': fallback_body
     }
 
 
@@ -229,9 +242,15 @@ BODY:
     result = _call_with_retry(prompt)
     if result:
         return _parse_email(result)
+    fallback_body = (
+        f'{t["greeting"]} [Owner],\n\n'
+        f'Wanted to check if you had a chance to review the valuation snapshot. '
+        f'Happy to walk through the data in a brief 5-minute call at your '
+        f'convenience.\n\n{t["sign_off"]},\n[Your Name]'
+    )
     return {
         'subject': f'Quick follow-up - {company}',
-        'body': f'{t["greeting"]} [Owner],\n\nWanted to check if you had a chance to review the valuation snapshot. Happy to walk through the data in a brief 5-minute call at your convenience.\n\n{t["sign_off"]},\n[Your Name]'
+        'body': fallback_body
     }
 
 
@@ -296,10 +315,16 @@ def generate_emails(
     results = {}
 
     with ThreadPoolExecutor(max_workers=3) as executor:
+        hook_future = executor.submit(
+            _generate_hook_email, company_name, industry, revenue,
+            median_multiple, tone, website_summary
+        )
+        asset_future = executor.submit(_generate_asset_email, company_name, tone)
+        close_future = executor.submit(_generate_close_email, company_name, tone)
         futures = {
-            executor.submit(_generate_hook_email, company_name, industry, revenue, median_multiple, tone, website_summary): 'hook',
-            executor.submit(_generate_asset_email, company_name, tone): 'asset',
-            executor.submit(_generate_close_email, company_name, tone): 'close'
+            hook_future: 'hook',
+            asset_future: 'asset',
+            close_future: 'close'
         }
 
         for future in as_completed(futures):
@@ -348,7 +373,7 @@ COMPANY INFO: {website_summary if website_summary else 'Limited information avai
 REQUIREMENTS:
 - Each bullet should be exactly 1 sentence
 - Focus on REALISTIC, SPECIFIC operational improvements
-- Reference concrete areas: pricing optimization, operational efficiency, scale synergies, technology upgrades, vendor consolidation
+- Reference concrete areas: pricing, efficiency, synergies, tech upgrades, vendor consolidation
 - Professional tone, data-driven language
 - NO generic statements, NO hype
 
@@ -376,10 +401,14 @@ Return ONLY the 3 bullets, one per line, starting with "•"."""
             return bullets
 
     # Fallback template bullets
+    margin_bullet = (
+        f"Margin improvement potential of {abs(margin_gap):.1f}% through "
+        "operational optimization and best practice implementation"
+    )
     return [
-        f"Margin improvement potential of {abs(margin_gap):.1f}% through operational optimization and best practice implementation",
-        "Scale synergies through EAI's platform resources, vendor relationships, and shared services infrastructure",
-        "Technology and process modernization to drive efficiency gains and improve customer retention"
+        margin_bullet,
+        "Scale synergies through EAI's platform resources and shared services",
+        "Technology modernization to drive efficiency and improve retention"
     ]
 
 
