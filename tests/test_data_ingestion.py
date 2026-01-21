@@ -403,6 +403,100 @@ class TestGetPeerGroup:
         peers = get_peer_group(pd.DataFrame(), "HVAC", 1000000)
         assert peers.empty
 
+    def test_custom_revenue_min(self):
+        """Test filtering with custom minimum revenue threshold."""
+        df = load_all_csvs("data")
+        # Set a higher minimum to narrow the range
+        peers = get_peer_group(df, "HVAC", 3000000, revenue_min=2500000)
+
+        valid_revenue = peers["revenue"].dropna()
+        if not valid_revenue.empty:
+            assert (valid_revenue >= 2500000).all()
+            # Max should still be default (3M * 1.5 = 4.5M)
+            assert (valid_revenue <= 4500000).all()
+
+    def test_custom_revenue_max(self):
+        """Test filtering with custom maximum revenue threshold."""
+        df = load_all_csvs("data")
+        # Set a lower maximum to narrow the range
+        peers = get_peer_group(df, "HVAC", 3000000, revenue_max=3500000)
+
+        valid_revenue = peers["revenue"].dropna()
+        if not valid_revenue.empty:
+            # Min should still be default (3M * 0.5 = 1.5M)
+            assert (valid_revenue >= 1500000).all()
+            assert (valid_revenue <= 3500000).all()
+
+    def test_custom_revenue_range_both_bounds(self):
+        """Test filtering with both custom min and max revenue thresholds."""
+        df = load_all_csvs("data")
+        peers = get_peer_group(
+            df, "HVAC", 3000000,
+            revenue_min=1000000,
+            revenue_max=5000000
+        )
+
+        valid_revenue = peers["revenue"].dropna()
+        if not valid_revenue.empty:
+            assert (valid_revenue >= 1000000).all()
+            assert (valid_revenue <= 5000000).all()
+
+    def test_wide_revenue_range_returns_more_peers(self):
+        """Test that wider revenue range returns more peers."""
+        df = load_all_csvs("data")
+
+        # Narrow range (default ±50%)
+        narrow_peers = get_peer_group(df, "HVAC", 3000000)
+
+        # Wide range (1M to 50M)
+        wide_peers = get_peer_group(
+            df, "HVAC", 3000000,
+            revenue_min=1000000,
+            revenue_max=50000000
+        )
+
+        # Wide range should have at least as many peers
+        assert len(wide_peers) >= len(narrow_peers)
+
+    def test_zero_revenue_min(self):
+        """Test that revenue_min=0 allows all low-revenue peers."""
+        df = load_all_csvs("data")
+        peers = get_peer_group(
+            df, "Transportation", 5000000,
+            revenue_min=0,
+            revenue_max=10000000
+        )
+
+        valid_revenue = peers["revenue"].dropna()
+        if not valid_revenue.empty:
+            assert (valid_revenue >= 0).all()
+            assert (valid_revenue <= 10000000).all()
+
+    def test_filters_different_industries(self):
+        """Test filtering works across different industries."""
+        df = load_all_csvs("data")
+
+        hvac_peers = get_peer_group(
+            df, "HVAC", 5000000,
+            revenue_min=1000000, revenue_max=20000000
+        )
+        trans_peers = get_peer_group(
+            df, "Transportation", 5000000,
+            revenue_min=1000000, revenue_max=20000000
+        )
+        util_peers = get_peer_group(
+            df, "Utility", 50000000,
+            revenue_min=10000000, revenue_max=100000000
+        )
+
+        # Each should only contain its own industry
+        if not hvac_peers.empty:
+            assert all(hvac_peers["industry"] == "HVAC")
+        if not trans_peers.empty:
+            assert all(trans_peers["industry"] == "Transportation")
+        if not util_peers.empty:
+            assert all(util_peers["industry"] == "Utility")
+
 
 class TestGetIndustryStats:
     """Tests for get_industry_stats function."""
