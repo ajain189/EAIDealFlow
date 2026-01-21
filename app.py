@@ -14,6 +14,10 @@ from modules.storage import (
     delete_entry, delete_entries, auto_archive_old_entries,
     increment_stat, get_stats
 )
+from modules.clipboard import (
+    copy_to_clipboard, format_email_for_copy,
+    format_valuation_for_copy, format_deal_summary_for_copy
+)
 from modules.config import load_config, save_config, reset_to_defaults
 from modules.first_visit import (
     is_first_visit, get_current_tooltip, advance_tooltip,
@@ -435,7 +439,15 @@ with st.sidebar:
         color = get_heat_color(heat)
         label = get_heat_label(heat)
 
-        st.markdown("### Deal Heat Score")
+        heat_col1, heat_col2 = st.columns([3, 1])
+        with heat_col1:
+            st.markdown("### Deal Heat Score")
+        with heat_col2:
+            if st.button("📋", key="copy_deal_summary", help="Copy deal summary"):
+                summary_text = format_deal_summary_for_copy(
+                    company_name, industry, revenue, heat, label, peer_count
+                )
+                copy_to_clipboard(summary_text, "Deal summary copied!")
         st.markdown(
             f"<h2 style='color:{color}; margin:0; font-family: JetBrains Mono;'>{heat}/100</h2>",
             unsafe_allow_html=True
@@ -592,7 +604,15 @@ with col1:
             # Valuation range
             val_range = calculate_valuation_range(peers, revenue)
             if val_range[0] > 0:
-                st.markdown("### Estimated Valuation Range")
+                val_header_col1, val_header_col2 = st.columns([3, 1])
+                with val_header_col1:
+                    st.markdown("### Estimated Valuation Range")
+                with val_header_col2:
+                    if st.button("📋 Copy", key="copy_valuation", use_container_width=True):
+                        valuation_text = format_valuation_for_copy(
+                            company_name, val_range[0], val_range[2], val_range[1]
+                        )
+                        copy_to_clipboard(valuation_text, "Valuation range copied!")
                 vcol1, vcol2, vcol3 = st.columns(3)
                 with vcol1:
                     st.metric("Low (25th %ile)", f"${val_range[0]:,.0f}")
@@ -724,11 +744,13 @@ with col2:
                     )
 
                     # Copy functionality
-                    full_email = f"Subject: {email.get('subject', '')}\n\n{email.get('body', '')}"
                     if st.button(f"📋 Copy {label} Email", key=f"copy_{key}", use_container_width=True):
-                        st.code(full_email, language=None)
+                        full_email = format_email_for_copy(
+                            email.get('subject', ''),
+                            email.get('body', '')
+                        )
+                        copy_to_clipboard(full_email, f"{label} email copied!")
                         increment_stat("emails_copied")
-                        st.info("👆 Select all text above and copy (Cmd+C)")
 
             st.divider()
 
