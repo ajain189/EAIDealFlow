@@ -7,7 +7,7 @@ from fpdf import FPDF
 import pandas as pd
 import tempfile
 import os
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 
 class DealFlowPDF(FPDF):
@@ -209,9 +209,9 @@ def generate_one_pager(
     pdf.set_text_color(55, 65, 81)
 
     for bullet in upside_bullets:
-        # Bullet point
+        # Bullet point - use hyphen as bullet since Helvetica doesn't support Unicode bullet
         pdf.set_x(15)
-        pdf.cell(5, 6, chr(8226), ln=False)  # Bullet character
+        pdf.cell(5, 6, '-', ln=False)
         pdf.multi_cell(180, 6, f' {bullet}')
         pdf.ln(1)
 
@@ -291,7 +291,7 @@ def generate_simple_one_pager(
 
     for bullet in upside_bullets:
         pdf.set_x(15)
-        pdf.cell(5, 6, chr(8226))
+        pdf.cell(5, 6, '-')
         pdf.multi_cell(180, 6, f' {bullet}')
         pdf.ln(2)
 
