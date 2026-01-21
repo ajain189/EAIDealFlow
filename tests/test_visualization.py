@@ -553,3 +553,154 @@ class TestPeerHoverInfo:
 
         assert 'Multiple' in peers_trace.hovertext[0]
         assert '2.50x' in peers_trace.hovertext[0]
+
+
+class TestRealTimeMarginUpdates:
+    """Tests for real-time margin slider chart updates.
+
+    These tests verify that the chart correctly responds to margin changes,
+    which is the underlying behavior that enables real-time slider updates.
+    """
+
+    def test_chart_updates_target_position_on_margin_change(self):
+        """Test that target marker position updates when margin changes."""
+        peers_df = create_sample_peers_df()
+        target_name = "Test Company"
+        target_revenue = 5_000_000
+
+        # Create chart with initial margin
+        fig1 = create_market_chart(peers_df, target_name, target_revenue, 10.0)
+        # Create chart with updated margin
+        fig2 = create_market_chart(peers_df, target_name, target_revenue, 25.0)
+
+        # Find target trace in both figures
+        target_y1 = None
+        target_y2 = None
+        for trace in fig1.data:
+            if trace.name == target_name:
+                target_y1 = trace.y[0]
+                break
+        for trace in fig2.data:
+            if trace.name == target_name:
+                target_y2 = trace.y[0]
+                break
+
+        assert target_y1 == 10.0
+        assert target_y2 == 25.0
+        assert target_y1 != target_y2
+
+    def test_chart_preserves_peers_on_margin_change(self):
+        """Test that peer data remains unchanged when margin slider moves."""
+        peers_df = create_sample_peers_df(num_peers=5)
+        target_name = "Test Company"
+        target_revenue = 5_000_000
+
+        # Create charts with different margins
+        fig1 = create_market_chart(peers_df, target_name, target_revenue, 10.0)
+        fig2 = create_market_chart(peers_df, target_name, target_revenue, 30.0)
+
+        # Find peer traces
+        peers1 = None
+        peers2 = None
+        for trace in fig1.data:
+            if trace.name == 'Market Peers':
+                peers1 = trace
+                break
+        for trace in fig2.data:
+            if trace.name == 'Market Peers':
+                peers2 = trace
+                break
+
+        # Peer data should be identical
+        assert list(peers1.x) == list(peers2.x)
+        assert list(peers1.y) == list(peers2.y)
+
+    def test_chart_preserves_confidence_band_on_margin_change(self):
+        """Test that IQR confidence band remains unchanged on margin change."""
+        peers_df = create_sample_peers_df(num_peers=10)
+        target_name = "Test Company"
+        target_revenue = 5_000_000
+
+        fig1 = create_market_chart(peers_df, target_name, target_revenue, 5.0)
+        fig2 = create_market_chart(peers_df, target_name, target_revenue, 45.0)
+
+        # Find IQR traces
+        iqr1 = None
+        iqr2 = None
+        for trace in fig1.data:
+            if 'IQR' in trace.name:
+                iqr1 = trace
+                break
+        for trace in fig2.data:
+            if 'IQR' in trace.name:
+                iqr2 = trace
+                break
+
+        # IQR band should be identical regardless of target margin
+        assert list(iqr1.x) == list(iqr2.x)
+        assert list(iqr1.y) == list(iqr2.y)
+
+    def test_margin_slider_range_boundaries(self):
+        """Test chart handles margin at slider boundaries (0% and 50%)."""
+        peers_df = create_sample_peers_df()
+        target_name = "Test Company"
+        target_revenue = 5_000_000
+
+        # Test minimum margin (0%)
+        fig_min = create_market_chart(peers_df, target_name, target_revenue, 0.0)
+        target_min = None
+        for trace in fig_min.data:
+            if trace.name == target_name:
+                target_min = trace
+                break
+        assert target_min.y[0] == 0.0
+
+        # Test maximum margin (50%)
+        fig_max = create_market_chart(peers_df, target_name, target_revenue, 50.0)
+        target_max = None
+        for trace in fig_max.data:
+            if trace.name == target_name:
+                target_max = trace
+                break
+        assert target_max.y[0] == 50.0
+
+    def test_incremental_margin_updates(self):
+        """Test chart handles small incremental margin changes (slider step)."""
+        peers_df = create_sample_peers_df()
+        target_name = "Test Company"
+        target_revenue = 5_000_000
+
+        # Simulate slider moving in 0.5% steps
+        margins = [15.0, 15.5, 16.0, 16.5, 17.0]
+        previous_y = None
+
+        for margin in margins:
+            fig = create_market_chart(peers_df, target_name, target_revenue, margin)
+            for trace in fig.data:
+                if trace.name == target_name:
+                    current_y = trace.y[0]
+                    assert current_y == margin
+                    if previous_y is not None:
+                        assert current_y - previous_y == 0.5
+                    previous_y = current_y
+                    break
+
+    def test_chart_structure_consistent_across_margin_changes(self):
+        """Test that chart structure remains consistent across margin changes."""
+        peers_df = create_sample_peers_df(num_peers=8)
+        target_name = "Test Company"
+        target_revenue = 5_000_000
+
+        # Create multiple charts with different margins
+        margins = [5.0, 15.0, 25.0, 35.0, 45.0]
+        trace_counts = []
+        trace_names_sets = []
+
+        for margin in margins:
+            fig = create_market_chart(peers_df, target_name, target_revenue, margin)
+            trace_counts.append(len(fig.data))
+            trace_names_sets.append({trace.name for trace in fig.data})
+
+        # All charts should have same structure
+        assert all(count == trace_counts[0] for count in trace_counts)
+        assert all(names == trace_names_sets[0] for names in trace_names_sets)
