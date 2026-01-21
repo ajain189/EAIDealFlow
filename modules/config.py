@@ -30,6 +30,12 @@ DEFAULT_CONFIG = {
         "revenue_min": None,
         "revenue_max": None
     },
+    "valuation": {
+        "confidence_thresholds": {
+            "high_min_peers": 10,
+            "medium_min_peers": 5
+        }
+    },
     "auto_archive_days": 90,
     "keyboard_shortcuts_enabled": False,
     "first_visit_complete": False
@@ -73,3 +79,10 @@ def get_peer_filtering_config(config: dict = None) -> dict:
     if config is None:
         config = load_config()
     return config.get('peer_filtering', DEFAULT_CONFIG['peer_filtering'])
+
+
+def get_valuation_config(config: dict = None) -> dict:
+    """Get valuation calculation settings from config."""
+    if config is None:
+        config = load_config()
+    return config.get('valuation', DEFAULT_CONFIG['valuation'])

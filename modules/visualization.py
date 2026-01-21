@@ -5,7 +5,6 @@ Creates interactive Plotly scatter charts with IQR confidence bands.
 
 import plotly.graph_objects as go
 import pandas as pd
-import numpy as np
 from typing import Tuple
 
 
@@ -65,7 +64,7 @@ def create_market_chart(
             # Create hover text with available info
             hover_texts = []
             for _, row in peer_data.iterrows():
-                text = f"<b>Comparable Deal</b><br>"
+                text = "<b>Comparable Deal</b><br>"
                 text += f"Revenue: ${row['revenue']:,.0f}<br>"
                 text += f"EBITDA Margin: {row['ebitda_margin']:.1f}%"
                 if 'multiple' in row and pd.notna(row['multiple']):
@@ -184,6 +183,125 @@ def calculate_valuation_range(peers_df: pd.DataFrame, target_revenue: float) -> 
         target_revenue * high_multiple,
         target_revenue * median_multiple
     )
+
+
+def calculate_valuation_range_detailed(
+    peers_df: pd.DataFrame,
+    target_revenue: float,
+    target_ebitda: float = None
+) -> dict:
+    """
+    Calculate detailed valuation range with multiple metrics.
+
+    Provides a comprehensive valuation breakdown including:
+    - Min, 25th percentile, median, 75th percentile, and max valuations
+    - The multiples used for each calculation
+    - Statistics about the peer group used
+
+    Args:
+        peers_df: DataFrame with 'multiple' column (and optionally 'ebitda_margin')
+        target_revenue: Target company revenue
+        target_ebitda: Optional target EBITDA (if None, calculated from margin if available)
+
+    Returns:
+        Dictionary containing:
+        - 'valuations': dict with min, p25, median, p75, max valuations
+        - 'multiples': dict with min, p25, median, p75, max multiples
+        - 'peer_count': number of peers with valid multiple data
+        - 'method': valuation method used ('ev_revenue_multiple')
+        - 'confidence': 'high', 'medium', or 'low' based on peer count
+    """
+    result = {
+        'valuations': {
+            'min': 0,
+            'p25': 0,
+            'median': 0,
+            'p75': 0,
+            'max': 0
+        },
+        'multiples': {
+            'min': 0,
+            'p25': 0,
+            'median': 0,
+            'p75': 0,
+            'max': 0
+        },
+        'peer_count': 0,
+        'method': 'ev_revenue_multiple',
+        'confidence': 'low'
+    }
+
+    if peers_df.empty or 'multiple' not in peers_df.columns:
+        return result
+
+    multiples = peers_df['multiple'].dropna()
+    if len(multiples) == 0:
+        return result
+
+    peer_count = len(multiples)
+    result['peer_count'] = peer_count
+
+    # Calculate confidence level based on peer count
+    if peer_count >= 10:
+        result['confidence'] = 'high'
+    elif peer_count >= 5:
+        result['confidence'] = 'medium'
+    else:
+        result['confidence'] = 'low'
+
+    # Calculate multiple statistics
+    result['multiples'] = {
+        'min': float(multiples.min()),
+        'p25': float(multiples.quantile(0.25)),
+        'median': float(multiples.median()),
+        'p75': float(multiples.quantile(0.75)),
+        'max': float(multiples.max())
+    }
+
+    # Calculate valuations using Multiple × Revenue
+    result['valuations'] = {
+        'min': target_revenue * result['multiples']['min'],
+        'p25': target_revenue * result['multiples']['p25'],
+        'median': target_revenue * result['multiples']['median'],
+        'p75': target_revenue * result['multiples']['p75'],
+        'max': target_revenue * result['multiples']['max']
+    }
+
+    return result
+
+
+def get_valuation_summary(detailed_result: dict) -> str:
+    """
+    Generate a human-readable summary of the valuation range.
+
+    Args:
+        detailed_result: Result from calculate_valuation_range_detailed()
+
+    Returns:
+        Formatted string summary of the valuation
+    """
+    if detailed_result['peer_count'] == 0:
+        return "Insufficient peer data for valuation"
+
+    vals = detailed_result['valuations']
+    mults = detailed_result['multiples']
+    conf = detailed_result['confidence']
+
+    confidence_text = {
+        'high': 'High confidence',
+        'medium': 'Moderate confidence',
+        'low': 'Low confidence'
+    }.get(conf, 'Unknown confidence')
+
+    summary = (
+        f"Valuation Range: ${vals['p25']:,.0f} - ${vals['p75']:,.0f}\n"
+        f"Median Valuation: ${vals['median']:,.0f}\n"
+        f"Multiple Range: {mults['p25']:.2f}x - {mults['p75']:.2f}x (median: {mults['median']:.2f}x)\n"
+        f"Based on {detailed_result['peer_count']} comparable transactions\n"
+        f"{confidence_text} ({detailed_result['peer_count']} peers)"
+    )
+
+    return summary
 
 
 def get_chart_config() -> dict:
