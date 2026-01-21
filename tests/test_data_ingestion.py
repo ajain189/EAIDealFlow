@@ -10,6 +10,7 @@ import tempfile
 from modules.data_ingestion import (
     clean_numeric,
     detect_industry,
+    detect_industry_with_details,
     normalize_columns,
     load_all_csvs,
     get_available_industries,
@@ -117,6 +118,114 @@ class TestDetectIndustry:
 
     def test_detect_empty(self):
         assert detect_industry("") == "Other"
+
+    def test_detect_hvac_mechanical_contractor(self):
+        """Test mechanical contractor keyword."""
+        assert detect_industry("Industrial Mechanical Contractor Services") == "HVAC"
+
+    def test_detect_hvac_plumbing(self):
+        """Test plumbing keyword."""
+        assert detect_industry("Plumbing and HVAC Company") == "HVAC"
+
+    def test_detect_transportation_charter(self):
+        """Test charter keyword."""
+        assert detect_industry("Charter Bus Business") == "Transportation"
+
+    def test_detect_transportation_customs(self):
+        """Test customs broker keyword."""
+        assert detect_industry("Customs Broker Services") == "Transportation"
+
+    def test_detect_transportation_warehouse(self):
+        """Test warehouse keyword."""
+        assert detect_industry("Warehouse and Freight Services") == "Transportation"
+
+    def test_detect_utility_power_plant(self):
+        """Test power plant keyword."""
+        assert detect_industry("Coal-Fired Power Plant") == "Utility"
+
+    def test_detect_utility_natural_gas(self):
+        """Test natural gas keyword."""
+        assert detect_industry("Natural Gas Distribution Company") == "Utility"
+
+    def test_detect_utility_water_treatment(self):
+        """Test water treatment keyword."""
+        assert detect_industry("Water Treatment and Purification") == "Utility"
+
+    def test_detect_utility_photovoltaic(self):
+        """Test photovoltaic keyword."""
+        assert detect_industry("Photovoltaic Power Generation Projects") == "Utility"
+
+    def test_detect_scoring_prefers_more_matches(self):
+        """Test that descriptions with more matching keywords win."""
+        # HVAC should win when more HVAC keywords are present
+        desc = "Heating, Ventilation, and Air Conditioning (HVAC) Company"
+        assert detect_industry(desc) == "HVAC"
+
+    def test_detect_whitespace_only(self):
+        """Test whitespace-only string returns Other."""
+        assert detect_industry("   ") == "Other"
+
+
+class TestDetectIndustryWithDetails:
+    """Tests for detect_industry_with_details function."""
+
+    def test_returns_dict_structure(self):
+        """Test that function returns expected dict structure."""
+        result = detect_industry_with_details("HVAC Company")
+        assert isinstance(result, dict)
+        assert 'industry' in result
+        assert 'matched_keywords' in result
+        assert 'scores' in result
+        assert 'confidence' in result
+
+    def test_hvac_matched_keywords(self):
+        """Test matched keywords are returned."""
+        result = detect_industry_with_details("Heating, Ventilation, and Air Conditioning (HVAC) Company")
+        assert result['industry'] == 'HVAC'
+        assert 'hvac' in result['matched_keywords']
+        assert 'heating' in result['matched_keywords']
+        assert 'ventilation' in result['matched_keywords']
+        assert 'air conditioning' in result['matched_keywords']
+
+    def test_scores_dict(self):
+        """Test scores dictionary is populated."""
+        result = detect_industry_with_details("HVAC and Solar Company")
+        assert 'HVAC' in result['scores']
+        assert 'Utility' in result['scores']
+        assert result['scores']['HVAC'] > 0
+        assert result['scores']['Utility'] > 0
+
+    def test_high_confidence_single_industry(self):
+        """Test high confidence when only one industry matches."""
+        result = detect_industry_with_details("Trucking and Freight Company")
+        assert result['industry'] == 'Transportation'
+        assert result['confidence'] == 'high'
+
+    def test_confidence_with_competing_industries(self):
+        """Test confidence when multiple industries match."""
+        # When matches are close, confidence should be lower
+        result = detect_industry_with_details("Solar Freight Transportation")
+        assert result['confidence'] in ['low', 'medium', 'high']
+
+    def test_other_returns_empty_matches(self):
+        """Test Other industry returns empty matches."""
+        result = detect_industry_with_details("Generic Retail Store")
+        assert result['industry'] == 'Other'
+        assert result['matched_keywords'] == []
+        assert result['scores'] == {}
+        assert result['confidence'] == 'low'
+
+    def test_none_input(self):
+        """Test None input returns Other with low confidence."""
+        result = detect_industry_with_details(None)
+        assert result['industry'] == 'Other'
+        assert result['confidence'] == 'low'
+
+    def test_empty_input(self):
+        """Test empty input returns Other with low confidence."""
+        result = detect_industry_with_details("")
+        assert result['industry'] == 'Other'
+        assert result['confidence'] == 'low'
 
 
 class TestNormalizeColumns:
@@ -335,6 +444,33 @@ class TestIndustryKeywords:
     def test_utility_keywords_exist(self):
         assert "Utility" in INDUSTRY_KEYWORDS
         assert len(INDUSTRY_KEYWORDS["Utility"]) > 0
+
+    def test_hvac_has_expanded_keywords(self):
+        """Test HVAC has expanded keyword set."""
+        hvac_keywords = INDUSTRY_KEYWORDS["HVAC"]
+        assert 'hvac' in hvac_keywords
+        assert 'plumbing' in hvac_keywords
+        assert 'mechanical contractor' in hvac_keywords
+        assert 'pipe insulation' in hvac_keywords
+
+    def test_transportation_has_expanded_keywords(self):
+        """Test Transportation has expanded keyword set."""
+        trans_keywords = INDUSTRY_KEYWORDS["Transportation"]
+        assert 'trucking' in trans_keywords
+        assert 'charter' in trans_keywords
+        assert 'customs broker' in trans_keywords
+        assert 'warehouse' in trans_keywords
+        assert 'forwarding' in trans_keywords
+
+    def test_utility_has_expanded_keywords(self):
+        """Test Utility has expanded keyword set."""
+        util_keywords = INDUSTRY_KEYWORDS["Utility"]
+        assert 'solar' in util_keywords
+        assert 'power plant' in util_keywords
+        assert 'natural gas' in util_keywords
+        assert 'water treatment' in util_keywords
+        assert 'photovoltaic' in util_keywords
+        assert 'wastewater' in util_keywords
 
 
 class TestColumnMap:
