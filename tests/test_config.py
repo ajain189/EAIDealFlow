@@ -9,6 +9,7 @@ import tempfile
 from modules.config import (
     load_config,
     save_config,
+    reset_to_defaults,
     get_deal_heat_config,
     get_peer_filtering_config,
     get_valuation_config,
@@ -172,3 +173,239 @@ class TestValuationConfig:
         result = get_valuation_config(config_without_val)
         # Should return default values
         assert result == DEFAULT_CONFIG["valuation"]
+
+
+class TestAutoSaveConfig:
+    """Tests for auto-save configuration functionality."""
+
+    def test_default_config_has_auto_archive_days(self):
+        """Verify DEFAULT_CONFIG includes auto_archive_days setting."""
+        assert "auto_archive_days" in DEFAULT_CONFIG
+        assert DEFAULT_CONFIG["auto_archive_days"] == 90
+
+    def test_save_auto_archive_days(self):
+        """Test that auto_archive_days persists correctly."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_config_file = f.name
+
+        original_config_file = CONFIG_FILE
+
+        try:
+            import modules.config as config_module
+            config_module.CONFIG_FILE = temp_config_file
+
+            custom_config = {
+                **DEFAULT_CONFIG,
+                "auto_archive_days": 30
+            }
+            save_config(custom_config)
+
+            loaded = load_config()
+            assert loaded["auto_archive_days"] == 30
+
+        finally:
+            config_module.CONFIG_FILE = original_config_file
+            if os.path.exists(temp_config_file):
+                os.remove(temp_config_file)
+
+    def test_save_preserves_nested_deal_heat_settings(self):
+        """Test that saving deal_heat preserves nested weights and thresholds."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_config_file = f.name
+
+        original_config_file = CONFIG_FILE
+
+        try:
+            import modules.config as config_module
+            config_module.CONFIG_FILE = temp_config_file
+
+            # Start with default config
+            save_config(DEFAULT_CONFIG.copy())
+
+            # Simulate updating deal_heat while preserving nested values
+            loaded = load_config()
+            dh = loaded.get('deal_heat', {})
+            updated_deal_heat = {
+                **dh,
+                'revenue_min': 3_000_000,
+                'revenue_max': 15_000_000,
+                'peer_threshold': 8,
+                'margin_threshold': 20
+            }
+            loaded['deal_heat'] = updated_deal_heat
+            save_config(loaded)
+
+            # Verify nested values are preserved
+            final = load_config()
+            assert final['deal_heat']['revenue_min'] == 3_000_000
+            assert final['deal_heat']['revenue_max'] == 15_000_000
+            assert final['deal_heat']['peer_threshold'] == 8
+            assert final['deal_heat']['margin_threshold'] == 20
+            # Check nested values are preserved
+            assert 'weights' in final['deal_heat']
+            assert 'label_thresholds' in final['deal_heat']
+
+        finally:
+            config_module.CONFIG_FILE = original_config_file
+            if os.path.exists(temp_config_file):
+                os.remove(temp_config_file)
+
+    def test_save_multiple_settings_simultaneously(self):
+        """Test that multiple settings can be saved at once."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_config_file = f.name
+
+        original_config_file = CONFIG_FILE
+
+        try:
+            import modules.config as config_module
+            config_module.CONFIG_FILE = temp_config_file
+
+            custom_config = {
+                **DEFAULT_CONFIG,
+                "auto_archive_days": 60,
+                "deal_heat": {
+                    **DEFAULT_CONFIG["deal_heat"],
+                    "revenue_min": 5_000_000,
+                    "margin_threshold": 25
+                }
+            }
+            save_config(custom_config)
+
+            loaded = load_config()
+            assert loaded["auto_archive_days"] == 60
+            assert loaded["deal_heat"]["revenue_min"] == 5_000_000
+            assert loaded["deal_heat"]["margin_threshold"] == 25
+
+        finally:
+            config_module.CONFIG_FILE = original_config_file
+            if os.path.exists(temp_config_file):
+                os.remove(temp_config_file)
+
+    def test_save_config_creates_file_if_not_exists(self):
+        """Test that save_config creates the config file if it doesn't exist."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_config_file = os.path.join(temp_dir, 'new_config.json')
+
+            original_config_file = CONFIG_FILE
+
+            try:
+                import modules.config as config_module
+                config_module.CONFIG_FILE = temp_config_file
+
+                assert not os.path.exists(temp_config_file)
+                save_config(DEFAULT_CONFIG)
+                assert os.path.exists(temp_config_file)
+
+            finally:
+                config_module.CONFIG_FILE = original_config_file
+
+    def test_load_config_returns_defaults_on_missing_file(self):
+        """Test that load_config returns defaults when file doesn't exist."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_config_file = os.path.join(temp_dir, 'nonexistent.json')
+
+            original_config_file = CONFIG_FILE
+
+            try:
+                import modules.config as config_module
+                config_module.CONFIG_FILE = temp_config_file
+
+                loaded = load_config()
+                assert loaded == DEFAULT_CONFIG
+
+            finally:
+                config_module.CONFIG_FILE = original_config_file
+
+    def test_load_config_returns_defaults_on_invalid_json(self):
+        """Test that load_config returns defaults when file has invalid JSON."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write("invalid json content {{{")
+            temp_config_file = f.name
+
+        original_config_file = CONFIG_FILE
+
+        try:
+            import modules.config as config_module
+            config_module.CONFIG_FILE = temp_config_file
+
+            loaded = load_config()
+            assert loaded == DEFAULT_CONFIG
+
+        finally:
+            config_module.CONFIG_FILE = original_config_file
+            if os.path.exists(temp_config_file):
+                os.remove(temp_config_file)
+
+    def test_auto_archive_days_boundary_values(self):
+        """Test auto_archive_days with boundary values (min: 7, max: 365)."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_config_file = f.name
+
+        original_config_file = CONFIG_FILE
+
+        try:
+            import modules.config as config_module
+            config_module.CONFIG_FILE = temp_config_file
+
+            # Test minimum value
+            config = {**DEFAULT_CONFIG, "auto_archive_days": 7}
+            save_config(config)
+            loaded = load_config()
+            assert loaded["auto_archive_days"] == 7
+
+            # Test maximum value
+            config = {**DEFAULT_CONFIG, "auto_archive_days": 365}
+            save_config(config)
+            loaded = load_config()
+            assert loaded["auto_archive_days"] == 365
+
+        finally:
+            config_module.CONFIG_FILE = original_config_file
+            if os.path.exists(temp_config_file):
+                os.remove(temp_config_file)
+
+    def test_reset_to_defaults_restores_all_settings(self):
+        """Test that reset_to_defaults restores all settings to defaults."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_config_file = f.name
+
+        original_config_file = CONFIG_FILE
+
+        try:
+            import modules.config as config_module
+            config_module.CONFIG_FILE = temp_config_file
+
+            # Save custom config with modified values
+            custom_config = {
+                **DEFAULT_CONFIG,
+                "auto_archive_days": 30,
+                "deal_heat": {
+                    **DEFAULT_CONFIG["deal_heat"],
+                    "revenue_min": 5_000_000,
+                    "margin_threshold": 30
+                }
+            }
+            save_config(custom_config)
+
+            # Verify custom values were saved
+            loaded = load_config()
+            assert loaded["auto_archive_days"] == 30
+            assert loaded["deal_heat"]["revenue_min"] == 5_000_000
+
+            # Reset to defaults
+            reset_config = reset_to_defaults()
+
+            # Verify reset returns default values
+            assert reset_config["auto_archive_days"] == DEFAULT_CONFIG["auto_archive_days"]
+            assert reset_config["deal_heat"]["revenue_min"] == DEFAULT_CONFIG["deal_heat"]["revenue_min"]
+
+            # Verify file was updated
+            loaded_after_reset = load_config()
+            assert loaded_after_reset["auto_archive_days"] == DEFAULT_CONFIG["auto_archive_days"]
+            assert loaded_after_reset["deal_heat"]["revenue_min"] == DEFAULT_CONFIG["deal_heat"]["revenue_min"]
+
+        finally:
+            config_module.CONFIG_FILE = original_config_file
+            if os.path.exists(temp_config_file):
+                os.remove(temp_config_file)
