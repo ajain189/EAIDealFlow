@@ -1,0 +1,325 @@
+"""
+Tests for data_ingestion module.
+Tests CSV loading for all 3 industry files: HVAC, Transportation, Utility.
+"""
+
+import pandas as pd
+import numpy as np
+import tempfile
+
+from modules.data_ingestion import (
+    clean_numeric,
+    detect_industry,
+    normalize_columns,
+    load_all_csvs,
+    get_available_industries,
+    get_peer_group,
+    get_industry_stats,
+    INDUSTRY_KEYWORDS,
+    COLUMN_MAP
+)
+
+
+class TestCleanNumeric:
+    """Tests for clean_numeric function."""
+
+    def test_clean_currency(self):
+        assert clean_numeric("$1,000,000") == 1000000.0
+
+    def test_clean_percentage(self):
+        assert clean_numeric("15.5%") == 15.5
+
+    def test_clean_multiplier(self):
+        assert clean_numeric("3.5x") == 3.5
+
+    def test_clean_integer(self):
+        assert clean_numeric(100) == 100.0
+
+    def test_clean_float(self):
+        assert clean_numeric(99.9) == 99.9
+
+    def test_clean_na_string(self):
+        assert np.isnan(clean_numeric("N/A"))
+
+    def test_clean_dash(self):
+        assert np.isnan(clean_numeric("-"))
+
+    def test_clean_none(self):
+        assert np.isnan(clean_numeric(None))
+
+    def test_clean_nan(self):
+        assert np.isnan(clean_numeric(np.nan))
+
+    def test_clean_invalid_string(self):
+        assert np.isnan(clean_numeric("invalid"))
+
+
+class TestDetectIndustry:
+    """Tests for detect_industry function."""
+
+    def test_detect_hvac(self):
+        assert detect_industry("Heating, Ventilation, and Air Conditioning (HVAC) Company") == "HVAC"
+
+    def test_detect_hvac_refrigeration(self):
+        assert detect_industry("Commercial HVAC and refrigeration services") == "HVAC"
+
+    def test_detect_transportation_trucking(self):
+        assert detect_industry("Short Haul Trucking") == "Transportation"
+
+    def test_detect_transportation_freight(self):
+        assert detect_industry("Freight Brokerage and Trucking Company") == "Transportation"
+
+    def test_detect_transportation_logistics(self):
+        assert detect_industry("International Logistics Firm") == "Transportation"
+
+    def test_detect_transportation_bus(self):
+        assert detect_industry("Charter Bus Business") == "Transportation"
+
+    def test_detect_utility_solar(self):
+        assert detect_industry("Solar Energy Production") == "Utility"
+
+    def test_detect_utility_power(self):
+        assert detect_industry("Coal-Fired Power Plant") == "Utility"
+
+    def test_detect_utility_water(self):
+        assert detect_industry("Water Treatment Company") == "Utility"
+
+    def test_detect_utility_gas(self):
+        assert detect_industry("Natural Gas Distribution") == "Utility"
+
+    def test_detect_other(self):
+        assert detect_industry("Generic Retail Company") == "Other"
+
+    def test_detect_na(self):
+        assert detect_industry(None) == "Other"
+
+    def test_detect_empty(self):
+        assert detect_industry("") == "Other"
+
+
+class TestNormalizeColumns:
+    """Tests for normalize_columns function."""
+
+    def test_rename_revenue(self):
+        df = pd.DataFrame({"Revenue": [1000000]})
+        result = normalize_columns(df)
+        assert "revenue" in result.columns
+
+    def test_rename_ebitda_margin(self):
+        df = pd.DataFrame({"EBITDA Margin": ["15%"]})
+        result = normalize_columns(df)
+        assert "ebitda_margin" in result.columns
+
+    def test_rename_valuation_multiple(self):
+        df = pd.DataFrame({"Valuation Multiple": ["3.5x"]})
+        result = normalize_columns(df)
+        assert "multiple" in result.columns
+
+    def test_clean_numeric_values(self):
+        df = pd.DataFrame({
+            "Revenue": ["$1,000,000"],
+            "EBITDA Margin": ["15%"],
+            "Valuation Multiple": ["3.5x"]
+        })
+        result = normalize_columns(df)
+        assert result["revenue"].iloc[0] == 1000000.0
+        assert result["ebitda_margin"].iloc[0] == 15.0
+        assert result["multiple"].iloc[0] == 3.5
+
+    def test_adds_industry_column(self):
+        df = pd.DataFrame({"Description": ["HVAC Company"]})
+        result = normalize_columns(df)
+        assert "industry" in result.columns
+        assert result["industry"].iloc[0] == "HVAC"
+
+    def test_industry_other_when_no_description(self):
+        df = pd.DataFrame({"Revenue": [1000000]})
+        result = normalize_columns(df)
+        assert result["industry"].iloc[0] == "Other"
+
+
+class TestLoadAllCsvs:
+    """Tests for load_all_csvs function with actual data files."""
+
+    def test_loads_all_three_industry_files(self):
+        """Verify all 3 CSV files are loaded."""
+        df = load_all_csvs("data")
+
+        # Check that data was loaded
+        assert not df.empty
+
+        # Check source files are tracked
+        assert "source_file" in df.columns
+        source_files = df["source_file"].unique().tolist()
+
+        # Verify all 3 industry files are present
+        assert "HVAC" in source_files
+        assert "Transportation" in source_files
+        assert "Utility" in source_files
+
+    def test_has_required_columns(self):
+        """Verify normalized columns exist."""
+        df = load_all_csvs("data")
+
+        required_cols = ["revenue", "industry", "source_file"]
+        for col in required_cols:
+            assert col in df.columns, f"Missing required column: {col}"
+
+    def test_hvac_transactions_loaded(self):
+        """Verify HVAC transactions are present."""
+        df = load_all_csvs("data")
+        hvac_df = df[df["source_file"] == "HVAC"]
+
+        assert len(hvac_df) > 0
+        # HVAC file has 23 data rows
+        assert len(hvac_df) >= 20
+
+    def test_transportation_transactions_loaded(self):
+        """Verify Transportation transactions are present."""
+        df = load_all_csvs("data")
+        transportation_df = df[df["source_file"] == "Transportation"]
+
+        assert len(transportation_df) > 0
+        # Transportation file has 14 data rows
+        assert len(transportation_df) >= 10
+
+    def test_utility_transactions_loaded(self):
+        """Verify Utility transactions are present."""
+        df = load_all_csvs("data")
+        utility_df = df[df["source_file"] == "Utility"]
+
+        assert len(utility_df) > 0
+        # Utility file has 20 data rows
+        assert len(utility_df) >= 15
+
+    def test_industry_detection_works(self):
+        """Verify industry detection assigns correct industries."""
+        df = load_all_csvs("data")
+
+        industries = df["industry"].unique().tolist()
+
+        # At least HVAC, Transportation, Utility should be detected
+        assert "HVAC" in industries
+        assert "Transportation" in industries
+        assert "Utility" in industries
+
+    def test_numeric_columns_cleaned(self):
+        """Verify numeric columns are properly cleaned."""
+        df = load_all_csvs("data")
+
+        # Revenue should be numeric
+        assert df["revenue"].dtype in [np.float64, np.int64, float, int]
+
+        # Should have positive revenue values
+        valid_revenue = df["revenue"].dropna()
+        assert (valid_revenue > 0).all()
+
+    def test_empty_directory_returns_empty_df(self):
+        """Verify empty directory returns empty DataFrame."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            df = load_all_csvs(tmpdir)
+            assert df.empty
+
+    def test_nonexistent_directory_returns_empty_df(self):
+        """Verify non-existent directory returns empty DataFrame."""
+        df = load_all_csvs("/nonexistent/path")
+        assert df.empty
+
+
+class TestGetAvailableIndustries:
+    """Tests for get_available_industries function."""
+
+    def test_returns_industries_from_data(self):
+        df = load_all_csvs("data")
+        industries = get_available_industries(df)
+
+        assert "HVAC" in industries
+        assert "Transportation" in industries
+        assert "Utility" in industries
+
+    def test_empty_df_returns_defaults(self):
+        industries = get_available_industries(pd.DataFrame())
+
+        assert "HVAC" in industries
+        assert "Transportation" in industries
+        assert "Utility" in industries
+        assert "Other" in industries
+
+
+class TestGetPeerGroup:
+    """Tests for get_peer_group function."""
+
+    def test_filters_by_industry(self):
+        df = load_all_csvs("data")
+        peers = get_peer_group(df, "HVAC", 3000000)
+
+        assert all(peers["industry"] == "HVAC")
+
+    def test_filters_by_revenue_range(self):
+        df = load_all_csvs("data")
+        target_revenue = 3000000
+        peers = get_peer_group(df, "HVAC", target_revenue)
+
+        # Revenue should be within ±50%
+        min_rev = target_revenue * 0.5
+        max_rev = target_revenue * 1.5
+
+        valid_revenue = peers["revenue"].dropna()
+        assert (valid_revenue >= min_rev).all()
+        assert (valid_revenue <= max_rev).all()
+
+    def test_empty_df_returns_empty(self):
+        peers = get_peer_group(pd.DataFrame(), "HVAC", 1000000)
+        assert peers.empty
+
+
+class TestGetIndustryStats:
+    """Tests for get_industry_stats function."""
+
+    def test_returns_stats_dict(self):
+        df = load_all_csvs("data")
+        stats = get_industry_stats(df, "HVAC")
+
+        assert "count" in stats
+        assert "median_revenue" in stats
+        assert "median_margin" in stats
+        assert "median_multiple" in stats
+
+    def test_count_is_positive(self):
+        df = load_all_csvs("data")
+        stats = get_industry_stats(df, "HVAC")
+
+        assert stats["count"] > 0
+
+    def test_empty_industry_returns_zeros(self):
+        df = load_all_csvs("data")
+        stats = get_industry_stats(df, "NonexistentIndustry")
+
+        assert stats["count"] == 0
+        assert stats["median_revenue"] == 0
+
+
+class TestIndustryKeywords:
+    """Tests for INDUSTRY_KEYWORDS constant."""
+
+    def test_hvac_keywords_exist(self):
+        assert "HVAC" in INDUSTRY_KEYWORDS
+        assert len(INDUSTRY_KEYWORDS["HVAC"]) > 0
+
+    def test_transportation_keywords_exist(self):
+        assert "Transportation" in INDUSTRY_KEYWORDS
+        assert len(INDUSTRY_KEYWORDS["Transportation"]) > 0
+
+    def test_utility_keywords_exist(self):
+        assert "Utility" in INDUSTRY_KEYWORDS
+        assert len(INDUSTRY_KEYWORDS["Utility"]) > 0
+
+
+class TestColumnMap:
+    """Tests for COLUMN_MAP constant."""
+
+    def test_essential_mappings_exist(self):
+        assert "revenue" in COLUMN_MAP
+        assert "ebitda" in COLUMN_MAP
+        assert "multiple" in COLUMN_MAP
+        assert "description" in COLUMN_MAP
