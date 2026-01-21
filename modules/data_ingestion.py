@@ -21,13 +21,27 @@ COLUMN_MAP = {
     'mvic': ['MVIC Price', 'MVIC']
 }
 
-# Industry keyword detection
+# Industry keyword detection - expanded keywords based on actual transaction data
+# Keywords are matched case-insensitively against descriptions
 INDUSTRY_KEYWORDS = {
-    'HVAC': ['hvac', 'heating', 'ventilation', 'air conditioning', 'refrigeration', 'cooling'],
-    'Transportation': [
-        'trucking', 'freight', 'logistics', 'transportation', 'shipping', 'hauling', 'moving', 'bus', 'towing'
+    'HVAC': [
+        'hvac', 'hvacr', 'heating', 'ventilation', 'air conditioning',
+        'refrigeration', 'cooling', 'mechanical contractor', 'plumbing',
+        'pipe insulation', 'mechanical engineering'
     ],
-    'Utility': ['solar', 'energy', 'water', 'gas', 'power', 'electric', 'utility', 'wastewater', 'propane']
+    'Transportation': [
+        'trucking', 'freight', 'logistics', 'transportation', 'shipping',
+        'hauling', 'moving', 'bus', 'towing', 'charter', 'customs broker',
+        'packing', 'warehouse', 'storage services', 'forwarding',
+        'wood chips', 'sawdust', 'bark'
+    ],
+    'Utility': [
+        'solar', 'energy', 'water', 'gas', 'power', 'electric', 'utility',
+        'wastewater', 'propane', 'electricity', 'wind', 'coal', 'photovoltaic',
+        'power plant', 'power generation', 'natural gas', 'water treatment',
+        'water filtration', 'water purification', 'irrigation', 'distillates',
+        'net-metered', 'rooftop solar'
+    ]
 }
 
 
@@ -66,14 +80,109 @@ def clean_numeric(value) -> float:
 
 
 def detect_industry(description: str) -> str:
-    """Detect industry from description using keywords."""
-    if pd.isna(description):
+    """
+    Detect industry from description using keyword matching.
+
+    Uses a scoring system to find the best matching industry:
+    - Each keyword match adds to the industry's score
+    - Longer keyword matches score higher (more specific)
+    - Returns the industry with the highest score, or 'Other' if no matches
+
+    Args:
+        description: Company description text to analyze
+
+    Returns:
+        Industry name ('HVAC', 'Transportation', 'Utility', or 'Other')
+    """
+    if pd.isna(description) or not str(description).strip():
         return 'Other'
+
     desc_lower = str(description).lower()
+    industry_scores = {}
+
     for industry, keywords in INDUSTRY_KEYWORDS.items():
-        if any(kw in desc_lower for kw in keywords):
-            return industry
-    return 'Other'
+        score = 0
+        for keyword in keywords:
+            if keyword in desc_lower:
+                # Longer keywords are more specific, give them higher weight
+                score += len(keyword)
+        if score > 0:
+            industry_scores[industry] = score
+
+    if not industry_scores:
+        return 'Other'
+
+    # Return the industry with the highest score
+    return max(industry_scores, key=industry_scores.get)
+
+
+def detect_industry_with_details(description: str) -> dict:
+    """
+    Detect industry from description and return detailed match information.
+
+    Useful for debugging, UI feedback, or understanding why an industry was chosen.
+
+    Args:
+        description: Company description text to analyze
+
+    Returns:
+        dict with keys:
+            - industry: detected industry name
+            - matched_keywords: list of keywords that matched
+            - scores: dict of industry -> score for all matching industries
+            - confidence: 'high', 'medium', or 'low' based on score differential
+    """
+    if pd.isna(description) or not str(description).strip():
+        return {
+            'industry': 'Other',
+            'matched_keywords': [],
+            'scores': {},
+            'confidence': 'low'
+        }
+
+    desc_lower = str(description).lower()
+    industry_scores = {}
+    matched_keywords = {}
+
+    for industry, keywords in INDUSTRY_KEYWORDS.items():
+        matches = []
+        score = 0
+        for keyword in keywords:
+            if keyword in desc_lower:
+                matches.append(keyword)
+                score += len(keyword)
+        if score > 0:
+            industry_scores[industry] = score
+            matched_keywords[industry] = matches
+
+    if not industry_scores:
+        return {
+            'industry': 'Other',
+            'matched_keywords': [],
+            'scores': {},
+            'confidence': 'low'
+        }
+
+    best_industry = max(industry_scores, key=industry_scores.get)
+    best_score = industry_scores[best_industry]
+
+    # Calculate confidence based on score differential
+    other_scores = [s for ind, s in industry_scores.items() if ind != best_industry]
+    if not other_scores:
+        confidence = 'high'
+    elif best_score > max(other_scores) * 2:
+        confidence = 'high'
+    elif best_score > max(other_scores) * 1.5:
+        confidence = 'medium'
+    else:
+        confidence = 'low'
+
+    return {
+        'industry': best_industry,
+        'matched_keywords': matched_keywords.get(best_industry, []),
+        'scores': industry_scores,
+        'confidence': confidence
+    }
 
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
