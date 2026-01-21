@@ -110,9 +110,10 @@ def create_market_chart(
 
     # Layout with dark theme
     peer_count = len(peers_df) if not peers_df.empty else 0
+    subtitle = f'Based on {peer_count} comparable transactions'
     fig.update_layout(
         title=dict(
-            text=f'Market Position Analysis<br><sub style="color:#9ca3af">Based on {peer_count} comparable transactions</sub>',
+            text=f'Market Position Analysis<br><sub style="color:#9ca3af">{subtitle}</sub>',
             font=dict(size=18, color='white', family='Inter'),
             x=0.5,
             xanchor='center'
