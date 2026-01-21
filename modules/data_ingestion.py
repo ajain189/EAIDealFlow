@@ -24,7 +24,9 @@ COLUMN_MAP = {
 # Industry keyword detection
 INDUSTRY_KEYWORDS = {
     'HVAC': ['hvac', 'heating', 'ventilation', 'air conditioning', 'refrigeration', 'cooling'],
-    'Transportation': ['trucking', 'freight', 'logistics', 'transportation', 'shipping', 'hauling', 'moving', 'bus', 'towing'],
+    'Transportation': [
+        'trucking', 'freight', 'logistics', 'transportation', 'shipping', 'hauling', 'moving', 'bus', 'towing'
+    ],
     'Utility': ['solar', 'energy', 'water', 'gas', 'power', 'electric', 'utility', 'wastewater', 'propane']
 }
 
