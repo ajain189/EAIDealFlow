@@ -15,6 +15,11 @@ DEFAULT_CONFIG = {
         "peer_threshold": 5,
         "margin_threshold": 15
     },
+    "peer_filtering": {
+        "use_custom_range": False,
+        "revenue_min": None,
+        "revenue_max": None
+    },
     "auto_archive_days": 90,
     "keyboard_shortcuts_enabled": False,
     "first_visit_complete": False
@@ -51,3 +56,10 @@ def get_deal_heat_config(config: dict = None) -> dict:
     if config is None:
         config = load_config()
     return config.get('deal_heat', DEFAULT_CONFIG['deal_heat'])
+
+
+def get_peer_filtering_config(config: dict = None) -> dict:
+    """Get peer filtering settings from config."""
+    if config is None:
+        config = load_config()
+    return config.get('peer_filtering', DEFAULT_CONFIG['peer_filtering'])

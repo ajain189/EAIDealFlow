@@ -261,18 +261,39 @@ def get_available_industries(df: pd.DataFrame) -> List[str]:
     return sorted(industries)
 
 
-def get_peer_group(df: pd.DataFrame, industry: str, revenue: float) -> pd.DataFrame:
-    """Filter to same industry, revenue within ±50%."""
+def get_peer_group(
+    df: pd.DataFrame,
+    industry: str,
+    revenue: float,
+    revenue_min: float = None,
+    revenue_max: float = None
+) -> pd.DataFrame:
+    """
+    Filter peers by industry and revenue range.
+
+    Args:
+        df: DataFrame with peer transactions
+        industry: Industry to filter by (e.g., 'HVAC', 'Transportation', 'Utility')
+        revenue: Target company revenue (used for default ±50% range)
+        revenue_min: Optional minimum revenue threshold (absolute value).
+                     If None, defaults to revenue * 0.5
+        revenue_max: Optional maximum revenue threshold (absolute value).
+                     If None, defaults to revenue * 1.5
+
+    Returns:
+        DataFrame filtered by industry and revenue range
+    """
     if df.empty:
         return df
 
-    revenue_min = revenue * 0.5
-    revenue_max = revenue * 1.5
+    # Use provided bounds or default to ±50% of target revenue
+    min_bound = revenue_min if revenue_min is not None else revenue * 0.5
+    max_bound = revenue_max if revenue_max is not None else revenue * 1.5
 
     # Filter by industry and revenue range
     mask = (df['industry'] == industry)
     if 'revenue' in df.columns:
-        mask = mask & (df['revenue'] >= revenue_min) & (df['revenue'] <= revenue_max)
+        mask = mask & (df['revenue'] >= min_bound) & (df['revenue'] <= max_bound)
 
     filtered = df[mask].copy()
     return filtered
