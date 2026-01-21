@@ -394,30 +394,37 @@ with col1:
         if company_name and revenue > 0 and industry and industry != "+ Add Custom":
             peers = get_peer_group(df, industry, revenue)
 
-            # Calculate target margin
+            # Calculate default target margin
             if st.session_state.target_margin is None:
                 if len(peers) > 0 and 'ebitda_margin' in peers.columns:
                     default_margin = peers['ebitda_margin'].median()
-                    target_margin = default_margin if default_margin and default_margin > 0 else 15.0
+                    initial_margin = default_margin if default_margin and default_margin > 0 else 15.0
                 else:
-                    target_margin = 15.0
+                    initial_margin = 15.0
             else:
-                target_margin = st.session_state.target_margin
+                initial_margin = st.session_state.target_margin
 
-            # Margin adjustment slider
-            target_margin = st.slider(
-                "Adjust Target Margin (%)",
-                min_value=0.0,
-                max_value=50.0,
-                value=float(target_margin),
-                step=0.5,
-                help="Drag to adjust the target's estimated EBITDA margin position"
-            )
-            st.session_state.target_margin = target_margin
+            # Real-time chart fragment - only this section re-renders on slider change
+            @st.fragment
+            def render_margin_chart(peers_data, target_name, target_revenue, default_margin):
+                """Render slider and chart as a fragment for real-time updates."""
+                target_margin = st.slider(
+                    "Adjust Target Margin (%)",
+                    min_value=0.0,
+                    max_value=50.0,
+                    value=float(default_margin),
+                    step=0.5,
+                    help="Drag to adjust the target's estimated EBITDA margin position",
+                    key="margin_slider"
+                )
+                st.session_state.target_margin = target_margin
 
-            # Create and display chart
-            fig = create_market_chart(peers, company_name, revenue, target_margin)
-            st.plotly_chart(fig, use_container_width=True, config=get_chart_config())
+                # Create and display chart
+                fig = create_market_chart(peers_data, target_name, target_revenue, target_margin)
+                st.plotly_chart(fig, use_container_width=True, config=get_chart_config())
+
+            # Call the fragment with current data
+            render_margin_chart(peers, company_name, revenue, initial_margin)
 
             # Valuation range
             val_range = calculate_valuation_range(peers, revenue)
