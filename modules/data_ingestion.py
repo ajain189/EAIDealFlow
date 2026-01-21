@@ -32,14 +32,35 @@ INDUSTRY_KEYWORDS = {
 
 
 def clean_numeric(value) -> float:
-    """Strip $, %, x, commas and convert to float."""
+    """
+    Strip dirty data symbols ($, %, x, commas) and convert to float.
+
+    Handles:
+    - Currency: "$1,000,000" -> 1000000.0
+    - Percentages: "15.5%" -> 15.5
+    - Multiples: "3.5x" or "3.5X" -> 3.5
+    - Parentheses for negatives: "($1,000)" or "(1,000)" -> -1000.0
+    - Whitespace and mixed formats
+    """
     if pd.isna(value) or value == 'N/A' or value == '-':
         return np.nan
     if isinstance(value, (int, float)):
         return float(value)
-    cleaned = str(value).replace('$', '').replace(',', '').replace('%', '').replace('x', '').strip()
+
+    cleaned = str(value).strip()
+
+    # Handle parentheses indicating negative numbers
+    is_negative = cleaned.startswith('(') and cleaned.endswith(')')
+    if is_negative:
+        cleaned = cleaned[1:-1]
+
+    # Remove dirty data symbols (case-insensitive for 'x')
+    cleaned = cleaned.replace('$', '').replace(',', '').replace('%', '')
+    cleaned = cleaned.replace('x', '').replace('X', '').strip()
+
     try:
-        return float(cleaned)
+        result = float(cleaned)
+        return -result if is_negative else result
     except ValueError:
         return np.nan
 
