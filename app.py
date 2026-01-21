@@ -329,7 +329,8 @@ with st.sidebar:
                 value=int(dh.get('revenue_min', 2_000_000) / 1_000_000),
                 min_value=0,
                 max_value=100,
-                step=1
+                step=1,
+                key="admin_rev_min"
             ) * 1_000_000
 
         with col2:
@@ -338,38 +339,64 @@ with st.sidebar:
                 value=int(dh.get('revenue_max', 10_000_000) / 1_000_000),
                 min_value=0,
                 max_value=100,
-                step=1
+                step=1,
+                key="admin_rev_max"
             ) * 1_000_000
 
         new_peer_thresh = st.number_input(
             "Peer Count Threshold",
             value=dh.get('peer_threshold', 5),
             min_value=1,
-            max_value=20
+            max_value=20,
+            key="admin_peer_thresh"
         )
 
         new_margin_thresh = st.number_input(
             "Margin Threshold (%)",
             value=dh.get('margin_threshold', 15),
             min_value=0,
-            max_value=50
+            max_value=50,
+            key="admin_margin_thresh"
         )
 
-        # Auto-save on change
-        if (new_rev_min != dh.get('revenue_min') or
+        st.divider()
+        st.markdown("#### Archive Settings")
+
+        new_auto_archive = st.number_input(
+            "Auto-Archive After (Days)",
+            value=config.get('auto_archive_days', 90),
+            min_value=7,
+            max_value=365,
+            step=1,
+            help="Entries older than this many days will be automatically archived",
+            key="admin_auto_archive"
+        )
+
+        # Auto-save on change - check all settings
+        settings_changed = (
+            new_rev_min != dh.get('revenue_min') or
             new_rev_max != dh.get('revenue_max') or
             new_peer_thresh != dh.get('peer_threshold') or
-            new_margin_thresh != dh.get('margin_threshold')):
+            new_margin_thresh != dh.get('margin_threshold') or
+            new_auto_archive != config.get('auto_archive_days', 90)
+        )
 
-            config['deal_heat'] = {
+        if settings_changed:
+            # Preserve existing nested config values (weights, label_thresholds)
+            updated_deal_heat = {
+                **dh,
                 'revenue_min': new_rev_min,
                 'revenue_max': new_rev_max,
                 'peer_threshold': new_peer_thresh,
                 'margin_threshold': new_margin_thresh
             }
+            config['deal_heat'] = updated_deal_heat
+            config['auto_archive_days'] = new_auto_archive
             save_config(config)
-            st.success("Settings saved!")
+            st.success("Settings auto-saved!")
             st.rerun()
+
+        st.divider()
 
         if st.button("Reset to Defaults", use_container_width=True):
             config = reset_to_defaults()
