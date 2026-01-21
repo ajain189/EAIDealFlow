@@ -53,6 +53,28 @@ class TestCleanNumeric:
     def test_clean_invalid_string(self):
         assert np.isnan(clean_numeric("invalid"))
 
+    def test_clean_uppercase_x(self):
+        """Test uppercase X multiplier is handled."""
+        assert clean_numeric("3.5X") == 3.5
+
+    def test_clean_parentheses_negative(self):
+        """Test parentheses indicating negative numbers."""
+        assert clean_numeric("(1000)") == -1000.0
+
+    def test_clean_parentheses_with_currency(self):
+        """Test parentheses with currency format."""
+        assert clean_numeric("($1,000)") == -1000.0
+
+    def test_clean_whitespace(self):
+        """Test whitespace is stripped."""
+        assert clean_numeric("  $1,000  ") == 1000.0
+
+    def test_clean_combined_dirty_data(self):
+        """Test combined dirty data symbols."""
+        assert clean_numeric("$1,500,000") == 1500000.0
+        assert clean_numeric("25.5%") == 25.5
+        assert clean_numeric("2.5x") == 2.5
+
 
 class TestDetectIndustry:
     """Tests for detect_industry function."""
