@@ -1557,16 +1557,16 @@ ERROR_MESSAGES = {
 
 ## TASK 10: Testing Checklist
 
-- [ ] CSV loading with all 3 industry files
-- [ ] Column normalization with dirty data ($, %, x symbols)
-- [ ] Industry detection from descriptions
-- [ ] Peer filtering by industry + revenue range
-- [ ] Deal Heat scoring with configurable thresholds
-- [ ] Chart rendering with confidence band
-- [ ] Margin slider updates chart in real-time
-- [ ] Valuation range calculation
-- [ ] Email generation (all 3 tones)
-- [ ] PDF generation with all sections
+- [x] CSV loading with all 3 industry files
+- [x] Column normalization with dirty data ($, %, x symbols)
+- [x] Industry detection from descriptions
+- [x] Peer filtering by industry + revenue range
+- [x] Deal Heat scoring with configurable thresholds
+- [x] Chart rendering with confidence band
+- [x] Margin slider updates chart in real-time
+- [x] Valuation range calculation
+- [x] Email generation (all 3 tones)
+- [x] PDF generation with all sections
 - [ ] History save/load/delete
 - [ ] Admin settings auto-save
 - [ ] First-visit tooltip display
