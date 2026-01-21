@@ -4,6 +4,7 @@ Creates professional one-pager valuation reports using fpdf2.
 """
 
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 import pandas as pd
 import tempfile
 import os
@@ -22,13 +23,14 @@ class DealFlowPDF(FPDF):
         # Logo placeholder (text-based branding)
         self.set_font('Helvetica', 'B', 28)
         self.set_text_color(99, 102, 241)  # Blurple
-        self.cell(0, 12, 'EAI Capital', ln=False, align='L')
+        self.cell(0, 12, 'EAI Capital', new_x=XPos.RIGHT, new_y=YPos.TOP, align='L')
 
         # Tagline
         self.set_font('Helvetica', '', 10)
         self.set_text_color(128, 128, 128)
         self.set_xy(10, 22)
-        self.cell(0, 5, 'Valuation Snapshot', ln=True, align='L')
+        self.cell(0, 5, 'Valuation Snapshot', new_x=XPos.LMARGIN, new_y=YPos.NEXT,
+                  align='L')
 
         # Divider line
         self.set_draw_color(99, 102, 241)
@@ -74,12 +76,12 @@ def generate_one_pager(
     # ===== EXECUTIVE SUMMARY SECTION =====
     pdf.set_font('Helvetica', 'B', 18)
     pdf.set_text_color(31, 41, 55)  # Dark gray
-    pdf.cell(0, 10, f'Target: {company_name}', ln=True)
+    pdf.cell(0, 10, f'Target: {company_name}', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.set_font('Helvetica', '', 11)
     pdf.set_text_color(75, 85, 99)  # Medium gray
-    pdf.cell(0, 6, f'Industry: {industry}', ln=True)
-    pdf.cell(0, 6, f'Revenue: ${revenue:,.0f}', ln=True)
+    pdf.cell(0, 6, f'Industry: {industry}', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 6, f'Revenue: ${revenue:,.0f}', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(8)
 
     # ===== VALUATION RANGE BOX =====
@@ -96,16 +98,18 @@ def generate_one_pager(
     pdf.set_xy(15, box_y + 5)
     pdf.set_font('Helvetica', 'B', 11)
     pdf.set_text_color(99, 102, 241)
-    pdf.cell(0, 6, 'Estimated Valuation Range', ln=True)
+    pdf.cell(0, 6, 'Estimated Valuation Range', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.set_x(15)
     pdf.set_font('Helvetica', 'B', 20)
     pdf.set_text_color(31, 41, 55)
 
     if low > 0 and high > 0:
-        pdf.cell(0, 12, f'${low:,.0f} - ${high:,.0f}', ln=True)
+        pdf.cell(0, 12, f'${low:,.0f} - ${high:,.0f}',
+                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     else:
-        pdf.cell(0, 12, 'Insufficient data for valuation', ln=True)
+        pdf.cell(0, 12, 'Insufficient data for valuation',
+                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.set_y(box_y + 32)
 
@@ -124,7 +128,7 @@ def generate_one_pager(
             pdf.ln(5)
             pdf.set_font('Helvetica', 'B', 12)
             pdf.set_text_color(31, 41, 55)
-            pdf.cell(0, 8, 'Market Position', ln=True)
+            pdf.cell(0, 8, 'Market Position', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.ln(2)
 
             # Add image
@@ -137,14 +141,15 @@ def generate_one_pager(
             print(f"Chart export failed: {e}")
             pdf.set_font('Helvetica', 'I', 10)
             pdf.set_text_color(128, 128, 128)
-            pdf.cell(0, 8, '[Market position chart - see attached analysis]', ln=True)
+            pdf.cell(0, 8, '[Market position chart - see attached analysis]',
+                     new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.ln(8)
 
     # ===== COMPARABLE TRANSACTIONS TABLE =====
     pdf.set_font('Helvetica', 'B', 12)
     pdf.set_text_color(31, 41, 55)
-    pdf.cell(0, 8, 'Comparable Transactions', ln=True)
+    pdf.cell(0, 8, 'Comparable Transactions', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(2)
 
     if not top_comps.empty:
@@ -175,9 +180,12 @@ def generate_one_pager(
                 desc = desc[:37] + '...'
 
             # Format values
-            rev = f"${row.get('revenue', 0):,.0f}" if pd.notna(row.get('revenue')) else 'N/A'
-            margin = f"{row.get('ebitda_margin', 0):.1f}%" if pd.notna(row.get('ebitda_margin')) else 'N/A'
-            mult = f"{row.get('multiple', 0):.2f}x" if pd.notna(row.get('multiple')) else 'N/A'
+            rev_val = row.get('revenue')
+            rev = f"${rev_val:,.0f}" if pd.notna(rev_val) else 'N/A'
+            margin_val = row.get('ebitda_margin')
+            margin = f"{margin_val:.1f}%" if pd.notna(margin_val) else 'N/A'
+            mult_val = row.get('multiple')
+            mult = f"{mult_val:.2f}x" if pd.notna(mult_val) else 'N/A'
 
             # Alternate row colors
             if row_count % 2 == 1:
@@ -195,23 +203,24 @@ def generate_one_pager(
     else:
         pdf.set_font('Helvetica', 'I', 10)
         pdf.set_text_color(128, 128, 128)
-        pdf.cell(0, 8, 'No comparable transactions available for this criteria', ln=True)
+        pdf.cell(0, 8, 'No comparable transactions available for this criteria',
+                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.ln(8)
 
     # ===== OPERATIONAL UPSIDE SECTION =====
     pdf.set_font('Helvetica', 'B', 12)
     pdf.set_text_color(31, 41, 55)
-    pdf.cell(0, 8, 'Operational Upside Potential', ln=True)
+    pdf.cell(0, 8, 'Operational Upside Potential', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(2)
 
     pdf.set_font('Helvetica', '', 10)
     pdf.set_text_color(55, 65, 81)
 
     for bullet in upside_bullets:
-        # Bullet point - use hyphen as bullet since Helvetica doesn't support Unicode bullet
+        # Bullet point - use hyphen as bullet since Helvetica doesn't have Unicode
         pdf.set_x(15)
-        pdf.cell(5, 6, '-', ln=False)
+        pdf.cell(5, 6, '-', new_x=XPos.RIGHT, new_y=YPos.TOP)
         pdf.multi_cell(180, 6, f' {bullet}')
         pdf.ln(1)
 
@@ -247,13 +256,14 @@ def generate_simple_one_pager(
     # Executive Summary
     pdf.set_font('Helvetica', 'B', 18)
     pdf.set_text_color(31, 41, 55)
-    pdf.cell(0, 10, f'Target: {company_name}', ln=True)
+    pdf.cell(0, 10, f'Target: {company_name}', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.set_font('Helvetica', '', 11)
     pdf.set_text_color(75, 85, 99)
-    pdf.cell(0, 6, f'Industry: {industry}', ln=True)
-    pdf.cell(0, 6, f'Revenue: ${revenue:,.0f}', ln=True)
-    pdf.cell(0, 6, f'Based on {peer_count} comparable transactions', ln=True)
+    pdf.cell(0, 6, f'Industry: {industry}', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 6, f'Revenue: ${revenue:,.0f}', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 6, f'Based on {peer_count} comparable transactions',
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(10)
 
     # Valuation Box
@@ -267,23 +277,26 @@ def generate_simple_one_pager(
     pdf.set_xy(15, box_y + 6)
     pdf.set_font('Helvetica', 'B', 11)
     pdf.set_text_color(99, 102, 241)
-    pdf.cell(0, 6, 'Estimated Valuation Range', ln=True)
+    pdf.cell(0, 6, 'Estimated Valuation Range', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.set_x(15)
     pdf.set_font('Helvetica', 'B', 22)
     pdf.set_text_color(31, 41, 55)
 
     if low > 0:
-        pdf.cell(0, 12, f'${low:,.0f} - ${high:,.0f}', ln=True)
+        pdf.cell(0, 12, f'${low:,.0f} - ${high:,.0f}',
+                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     else:
-        pdf.cell(0, 12, 'Valuation data unavailable', ln=True)
+        pdf.cell(0, 12, 'Valuation data unavailable',
+                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.set_y(box_y + 40)
 
     # Operational Upside
     pdf.set_font('Helvetica', 'B', 12)
     pdf.set_text_color(31, 41, 55)
-    pdf.cell(0, 8, 'Operational Upside Potential', ln=True)
+    pdf.cell(0, 8, 'Operational Upside Potential',
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(3)
 
     pdf.set_font('Helvetica', '', 10)
@@ -291,7 +304,7 @@ def generate_simple_one_pager(
 
     for bullet in upside_bullets:
         pdf.set_x(15)
-        pdf.cell(5, 6, '-')
+        pdf.cell(5, 6, '-', new_x=XPos.RIGHT, new_y=YPos.TOP)
         pdf.multi_cell(180, 6, f' {bullet}')
         pdf.ln(2)
 
