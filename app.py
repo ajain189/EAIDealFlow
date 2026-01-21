@@ -15,6 +15,10 @@ from modules.storage import (
     increment_stat, get_stats
 )
 from modules.config import load_config, save_config, reset_to_defaults
+from modules.first_visit import (
+    is_first_visit, get_current_tooltip, advance_tooltip,
+    skip_tour, get_tour_progress, reset_tour
+)
 
 # ===== PAGE CONFIG =====
 st.set_page_config(
@@ -238,14 +242,139 @@ st.markdown("""
         color: var(--text-secondary) !important;
         font-size: 0.85rem !important;
     }
+
+    /* First-visit tooltip styles */
+    .tooltip-banner {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
+        border: 1px solid var(--accent-blurple);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+        position: relative;
+        backdrop-filter: blur(8px);
+    }
+
+    .tooltip-banner-title {
+        color: var(--text-primary) !important;
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        margin-bottom: 0.5rem !important;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .tooltip-banner-message {
+        color: var(--text-secondary) !important;
+        font-size: 0.95rem !important;
+        line-height: 1.5 !important;
+        margin-bottom: 0.75rem !important;
+    }
+
+    .tooltip-progress {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+    }
+
+    .tooltip-progress-dots {
+        display: flex;
+        gap: 4px;
+    }
+
+    .tooltip-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--glass-border);
+    }
+
+    .tooltip-dot.active {
+        background: var(--accent-blurple);
+    }
+
+    .tooltip-dot.completed {
+        background: var(--success);
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ===== FIRST VISIT TOOLTIP =====
-if not config.get('first_visit_complete', False):
-    st.toast("Welcome to DealFlow Terminal! Hover over fields for tips.", icon="👋")
-    config['first_visit_complete'] = True
-    save_config(config)
+# Initialize session state for tour
+if 'tour_action' not in st.session_state:
+    st.session_state.tour_action = None
+
+
+def render_tooltip_banner():
+    """Render the first-visit tooltip banner if applicable."""
+    if not is_first_visit():
+        return
+
+    tooltip = get_current_tooltip()
+    if not tooltip:
+        return
+
+    progress = get_tour_progress()
+
+    # Icon mapping
+    icon_map = {
+        "wave": "\U0001F44B",
+        "building": "\U0001F3E2",
+        "fire": "\U0001F525",
+        "chart": "\U0001F4C8",
+        "email": "\U0001F4E7",
+        "history": "\U0001F4CB"
+    }
+
+    icon = icon_map.get(tooltip.get("icon", ""), "\U0001F4A1")
+
+    # Build progress dots HTML
+    dots_html = ""
+    for i in range(progress["total_steps"]):
+        if i < progress["current_step"]:
+            dots_html += '<span class="tooltip-dot completed"></span>'
+        elif i == progress["current_step"]:
+            dots_html += '<span class="tooltip-dot active"></span>'
+        else:
+            dots_html += '<span class="tooltip-dot"></span>'
+
+    st.markdown(f"""
+    <div class="tooltip-banner">
+        <div class="tooltip-banner-title">{icon} {tooltip['title']}</div>
+        <div class="tooltip-banner-message">{tooltip['message']}</div>
+        <div class="tooltip-progress">
+            <div class="tooltip-progress-dots">{dots_html}</div>
+            <span>Step {progress['current_step'] + 1} of {progress['total_steps']}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Action buttons
+    col1, col2, col3 = st.columns([1, 1, 2])
+    with col1:
+        if st.button("Next \u2192", key="tour_next", type="primary", use_container_width=True):
+            st.session_state.tour_action = "next"
+    with col2:
+        if st.button("Skip Tour", key="tour_skip", use_container_width=True):
+            st.session_state.tour_action = "skip"
+
+    # Handle tour actions
+    if st.session_state.tour_action == "next":
+        st.session_state.tour_action = None
+        advance_tooltip()
+        st.rerun()
+    elif st.session_state.tour_action == "skip":
+        st.session_state.tour_action = None
+        skip_tour()
+        st.toast("Tour skipped. You can restart it from Admin Settings.", icon="\u2705")
+        st.rerun()
+
+
+# Render tooltip banner at the top of the page
+render_tooltip_banner()
 
 # ===== SIDEBAR =====
 with st.sidebar:
@@ -398,9 +527,16 @@ with st.sidebar:
 
         st.divider()
 
-        if st.button("Reset to Defaults", use_container_width=True):
-            config = reset_to_defaults()
-            st.rerun()
+        col_reset1, col_reset2 = st.columns(2)
+        with col_reset1:
+            if st.button("Reset to Defaults", use_container_width=True):
+                config = reset_to_defaults()
+                st.rerun()
+        with col_reset2:
+            if st.button("Restart Tour", use_container_width=True):
+                reset_tour()
+                st.toast("Tour restarted!", icon="\U0001F503")
+                st.rerun()
 
         st.divider()
 
