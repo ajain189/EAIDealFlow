@@ -11,6 +11,7 @@ from modules.config import (
     save_config,
     get_deal_heat_config,
     get_peer_filtering_config,
+    get_valuation_config,
     DEFAULT_CONFIG,
     CONFIG_FILE
 )
@@ -123,3 +124,51 @@ class TestConfigPersistence:
             config_module.CONFIG_FILE = original_config_file
             if os.path.exists(temp_config_file):
                 os.remove(temp_config_file)
+
+
+class TestValuationConfig:
+    """Tests for valuation configuration."""
+
+    def test_default_config_has_valuation(self):
+        """Verify DEFAULT_CONFIG includes valuation section."""
+        assert "valuation" in DEFAULT_CONFIG
+        val = DEFAULT_CONFIG["valuation"]
+        assert "confidence_thresholds" in val
+
+    def test_default_valuation_confidence_thresholds(self):
+        """Verify default valuation confidence thresholds."""
+        val = DEFAULT_CONFIG["valuation"]
+        thresholds = val["confidence_thresholds"]
+        assert thresholds["high_min_peers"] == 10
+        assert thresholds["medium_min_peers"] == 5
+
+    def test_get_valuation_config_returns_dict(self):
+        """Test get_valuation_config returns a dict."""
+        result = get_valuation_config()
+        assert isinstance(result, dict)
+
+    def test_get_valuation_config_has_required_keys(self):
+        """Test get_valuation_config returns required keys."""
+        result = get_valuation_config()
+        assert "confidence_thresholds" in result
+
+    def test_get_valuation_config_with_custom_config(self):
+        """Test get_valuation_config with custom config dict."""
+        custom_config = {
+            "valuation": {
+                "confidence_thresholds": {
+                    "high_min_peers": 15,
+                    "medium_min_peers": 8
+                }
+            }
+        }
+        result = get_valuation_config(custom_config)
+        assert result["confidence_thresholds"]["high_min_peers"] == 15
+        assert result["confidence_thresholds"]["medium_min_peers"] == 8
+
+    def test_get_valuation_config_falls_back_to_defaults(self):
+        """Test fallback to defaults when valuation missing."""
+        config_without_val = {"deal_heat": {}}
+        result = get_valuation_config(config_without_val)
+        # Should return default values
+        assert result == DEFAULT_CONFIG["valuation"]

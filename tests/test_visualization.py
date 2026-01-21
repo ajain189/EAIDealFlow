@@ -10,6 +10,8 @@ import plotly.graph_objects as go
 from modules.visualization import (
     create_market_chart,
     calculate_valuation_range,
+    calculate_valuation_range_detailed,
+    get_valuation_summary,
     get_chart_config,
     create_simple_chart_for_pdf
 )
@@ -704,3 +706,333 @@ class TestRealTimeMarginUpdates:
         # All charts should have same structure
         assert all(count == trace_counts[0] for count in trace_counts)
         assert all(names == trace_names_sets[0] for names in trace_names_sets)
+
+
+class TestCalculateValuationRangeDetailed:
+    """Tests for calculate_valuation_range_detailed function."""
+
+    def test_returns_dict_with_expected_keys(self):
+        """Test that function returns dict with all expected keys."""
+        peers_df = create_sample_peers_df()
+        result = calculate_valuation_range_detailed(peers_df, 5_000_000)
+
+        assert isinstance(result, dict)
+        assert 'valuations' in result
+        assert 'multiples' in result
+        assert 'peer_count' in result
+        assert 'method' in result
+        assert 'confidence' in result
+
+    def test_valuations_dict_has_all_percentiles(self):
+        """Test that valuations dict contains min, p25, median, p75, max."""
+        peers_df = create_sample_peers_df()
+        result = calculate_valuation_range_detailed(peers_df, 5_000_000)
+
+        vals = result['valuations']
+        assert 'min' in vals
+        assert 'p25' in vals
+        assert 'median' in vals
+        assert 'p75' in vals
+        assert 'max' in vals
+
+    def test_multiples_dict_has_all_percentiles(self):
+        """Test that multiples dict contains min, p25, median, p75, max."""
+        peers_df = create_sample_peers_df()
+        result = calculate_valuation_range_detailed(peers_df, 5_000_000)
+
+        mults = result['multiples']
+        assert 'min' in mults
+        assert 'p25' in mults
+        assert 'median' in mults
+        assert 'p75' in mults
+        assert 'max' in mults
+
+    def test_empty_dataframe_returns_zeros(self):
+        """Test that empty DataFrame returns result with zeros."""
+        peers_df = pd.DataFrame()
+        result = calculate_valuation_range_detailed(peers_df, 5_000_000)
+
+        assert result['peer_count'] == 0
+        assert result['confidence'] == 'low'
+        assert result['valuations']['median'] == 0
+
+    def test_missing_multiple_column_returns_zeros(self):
+        """Test that missing 'multiple' column returns zeros."""
+        peers_df = pd.DataFrame({
+            'revenue': [1_000_000, 2_000_000],
+            'ebitda_margin': [10.0, 15.0]
+        })
+        result = calculate_valuation_range_detailed(peers_df, 5_000_000)
+
+        assert result['peer_count'] == 0
+        assert result['valuations']['median'] == 0
+
+    def test_all_nan_multiples_returns_zeros(self):
+        """Test that all NaN multiples return zeros."""
+        peers_df = pd.DataFrame({
+            'multiple': [np.nan, np.nan, np.nan]
+        })
+        result = calculate_valuation_range_detailed(peers_df, 5_000_000)
+
+        assert result['peer_count'] == 0
+        assert result['valuations']['median'] == 0
+
+    def test_correct_multiple_calculations(self):
+        """Test that multiples are calculated correctly."""
+        peers_df = pd.DataFrame({
+            'multiple': [1.0, 2.0, 3.0, 4.0, 5.0]
+        })
+        result = calculate_valuation_range_detailed(peers_df, 1_000_000)
+
+        # With [1, 2, 3, 4, 5]:
+        # min = 1.0, max = 5.0, median = 3.0
+        # p25 = 2.0, p75 = 4.0
+        assert result['multiples']['min'] == 1.0
+        assert result['multiples']['max'] == 5.0
+        assert result['multiples']['median'] == 3.0
+        assert result['multiples']['p25'] == 2.0
+        assert result['multiples']['p75'] == 4.0
+
+    def test_correct_valuation_calculations(self):
+        """Test that valuations are calculated correctly from multiples."""
+        peers_df = pd.DataFrame({
+            'multiple': [2.0, 2.0, 2.0, 2.0, 2.0]  # Uniform multiples
+        })
+        target_revenue = 1_000_000
+        result = calculate_valuation_range_detailed(peers_df, target_revenue)
+
+        # All multiples are 2.0, so all valuations should be 2M
+        assert result['valuations']['min'] == 2_000_000
+        assert result['valuations']['p25'] == 2_000_000
+        assert result['valuations']['median'] == 2_000_000
+        assert result['valuations']['p75'] == 2_000_000
+        assert result['valuations']['max'] == 2_000_000
+
+    def test_valuations_scale_with_revenue(self):
+        """Test that valuations scale linearly with target revenue."""
+        peers_df = pd.DataFrame({
+            'multiple': [2.0, 3.0, 4.0, 5.0, 6.0]
+        })
+
+        result1 = calculate_valuation_range_detailed(peers_df, 1_000_000)
+        result2 = calculate_valuation_range_detailed(peers_df, 2_000_000)
+
+        # Valuations should double when revenue doubles
+        assert result2['valuations']['median'] == result1['valuations']['median'] * 2
+        assert result2['valuations']['p25'] == result1['valuations']['p25'] * 2
+        assert result2['valuations']['p75'] == result1['valuations']['p75'] * 2
+
+    def test_peer_count_correct(self):
+        """Test that peer_count reflects actual number of valid multiples."""
+        peers_df = pd.DataFrame({
+            'multiple': [1.0, 2.0, np.nan, 4.0, 5.0, np.nan]
+        })
+        result = calculate_valuation_range_detailed(peers_df, 1_000_000)
+
+        # Should count only non-NaN values (4 valid)
+        assert result['peer_count'] == 4
+
+    def test_high_confidence_with_many_peers(self):
+        """Test that confidence is 'high' with 10+ peers."""
+        peers_df = pd.DataFrame({
+            'multiple': [2.0] * 15
+        })
+        result = calculate_valuation_range_detailed(peers_df, 1_000_000)
+
+        assert result['confidence'] == 'high'
+        assert result['peer_count'] == 15
+
+    def test_medium_confidence_with_moderate_peers(self):
+        """Test that confidence is 'medium' with 5-9 peers."""
+        peers_df = pd.DataFrame({
+            'multiple': [2.0] * 7
+        })
+        result = calculate_valuation_range_detailed(peers_df, 1_000_000)
+
+        assert result['confidence'] == 'medium'
+        assert result['peer_count'] == 7
+
+    def test_low_confidence_with_few_peers(self):
+        """Test that confidence is 'low' with fewer than 5 peers."""
+        peers_df = pd.DataFrame({
+            'multiple': [2.0, 3.0, 4.0]
+        })
+        result = calculate_valuation_range_detailed(peers_df, 1_000_000)
+
+        assert result['confidence'] == 'low'
+        assert result['peer_count'] == 3
+
+    def test_method_is_ev_revenue_multiple(self):
+        """Test that method is always 'ev_revenue_multiple'."""
+        peers_df = create_sample_peers_df()
+        result = calculate_valuation_range_detailed(peers_df, 5_000_000)
+
+        assert result['method'] == 'ev_revenue_multiple'
+
+    def test_valuations_ordered_correctly(self):
+        """Test that valuations are in correct order: min <= p25 <= median <= p75 <= max."""
+        peers_df = create_sample_peers_df(num_peers=20)
+        result = calculate_valuation_range_detailed(peers_df, 5_000_000)
+
+        vals = result['valuations']
+        assert vals['min'] <= vals['p25']
+        assert vals['p25'] <= vals['median']
+        assert vals['median'] <= vals['p75']
+        assert vals['p75'] <= vals['max']
+
+    def test_multiples_ordered_correctly(self):
+        """Test that multiples are in correct order: min <= p25 <= median <= p75 <= max."""
+        peers_df = create_sample_peers_df(num_peers=20)
+        result = calculate_valuation_range_detailed(peers_df, 5_000_000)
+
+        mults = result['multiples']
+        assert mults['min'] <= mults['p25']
+        assert mults['p25'] <= mults['median']
+        assert mults['median'] <= mults['p75']
+        assert mults['p75'] <= mults['max']
+
+    def test_consistency_with_basic_function(self):
+        """Test that detailed results are consistent with basic calculate_valuation_range."""
+        peers_df = create_sample_peers_df()
+        target_revenue = 5_000_000
+
+        basic_result = calculate_valuation_range(peers_df, target_revenue)
+        detailed_result = calculate_valuation_range_detailed(peers_df, target_revenue)
+
+        # Basic returns (low, high, median) which should match (p25, p75, median)
+        assert basic_result[0] == detailed_result['valuations']['p25']
+        assert basic_result[1] == detailed_result['valuations']['p75']
+        assert basic_result[2] == detailed_result['valuations']['median']
+
+    def test_handles_single_peer(self):
+        """Test handling of single peer (all percentiles should be same)."""
+        peers_df = pd.DataFrame({
+            'multiple': [3.0]
+        })
+        result = calculate_valuation_range_detailed(peers_df, 1_000_000)
+
+        # With single value, all should equal 3.0 * 1M = 3M
+        assert result['valuations']['min'] == 3_000_000
+        assert result['valuations']['p25'] == 3_000_000
+        assert result['valuations']['median'] == 3_000_000
+        assert result['valuations']['p75'] == 3_000_000
+        assert result['valuations']['max'] == 3_000_000
+        assert result['confidence'] == 'low'
+
+    def test_handles_large_multiples(self):
+        """Test handling of large multiple values."""
+        peers_df = pd.DataFrame({
+            'multiple': [10.0, 15.0, 20.0, 25.0, 30.0]
+        })
+        result = calculate_valuation_range_detailed(peers_df, 1_000_000)
+
+        # Should handle large values without error
+        assert result['valuations']['max'] == 30_000_000
+        assert result['multiples']['max'] == 30.0
+
+
+class TestGetValuationSummary:
+    """Tests for get_valuation_summary function."""
+
+    def test_returns_string(self):
+        """Test that function returns a string."""
+        peers_df = create_sample_peers_df()
+        detailed = calculate_valuation_range_detailed(peers_df, 5_000_000)
+        summary = get_valuation_summary(detailed)
+
+        assert isinstance(summary, str)
+
+    def test_empty_data_message(self):
+        """Test message when peer count is zero."""
+        result = {
+            'valuations': {'min': 0, 'p25': 0, 'median': 0, 'p75': 0, 'max': 0},
+            'multiples': {'min': 0, 'p25': 0, 'median': 0, 'p75': 0, 'max': 0},
+            'peer_count': 0,
+            'method': 'ev_revenue_multiple',
+            'confidence': 'low'
+        }
+        summary = get_valuation_summary(result)
+
+        assert summary == "Insufficient peer data for valuation"
+
+    def test_includes_valuation_range(self):
+        """Test that summary includes valuation range."""
+        peers_df = pd.DataFrame({
+            'multiple': [2.0, 2.5, 3.0, 3.5, 4.0]
+        })
+        detailed = calculate_valuation_range_detailed(peers_df, 1_000_000)
+        summary = get_valuation_summary(detailed)
+
+        assert 'Valuation Range' in summary
+        assert '$' in summary
+
+    def test_includes_median_valuation(self):
+        """Test that summary includes median valuation."""
+        peers_df = create_sample_peers_df()
+        detailed = calculate_valuation_range_detailed(peers_df, 5_000_000)
+        summary = get_valuation_summary(detailed)
+
+        assert 'Median Valuation' in summary
+
+    def test_includes_multiple_range(self):
+        """Test that summary includes multiple range."""
+        peers_df = create_sample_peers_df()
+        detailed = calculate_valuation_range_detailed(peers_df, 5_000_000)
+        summary = get_valuation_summary(detailed)
+
+        assert 'Multiple Range' in summary
+        assert 'x' in summary  # Multiple format like "2.50x"
+
+    def test_includes_peer_count(self):
+        """Test that summary includes peer count."""
+        peers_df = pd.DataFrame({
+            'multiple': [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+        })
+        detailed = calculate_valuation_range_detailed(peers_df, 1_000_000)
+        summary = get_valuation_summary(detailed)
+
+        assert '7' in summary
+        assert 'comparable transactions' in summary
+
+    def test_high_confidence_text(self):
+        """Test that high confidence is displayed correctly."""
+        peers_df = pd.DataFrame({
+            'multiple': [2.0] * 12
+        })
+        detailed = calculate_valuation_range_detailed(peers_df, 1_000_000)
+        summary = get_valuation_summary(detailed)
+
+        assert 'High confidence' in summary
+
+    def test_medium_confidence_text(self):
+        """Test that medium confidence is displayed correctly."""
+        peers_df = pd.DataFrame({
+            'multiple': [2.0] * 6
+        })
+        detailed = calculate_valuation_range_detailed(peers_df, 1_000_000)
+        summary = get_valuation_summary(detailed)
+
+        assert 'Moderate confidence' in summary
+
+    def test_low_confidence_text(self):
+        """Test that low confidence is displayed correctly."""
+        peers_df = pd.DataFrame({
+            'multiple': [2.0, 3.0, 4.0]
+        })
+        detailed = calculate_valuation_range_detailed(peers_df, 1_000_000)
+        summary = get_valuation_summary(detailed)
+
+        assert 'Low confidence' in summary
+
+    def test_formatted_currency_values(self):
+        """Test that currency values are properly formatted."""
+        peers_df = pd.DataFrame({
+            'multiple': [2.0, 2.5, 3.0, 3.5, 4.0]
+        })
+        detailed = calculate_valuation_range_detailed(peers_df, 1_000_000)
+        summary = get_valuation_summary(detailed)
+
+        # Should contain comma-formatted currency
+        assert '$' in summary
+        # Values should be formatted without decimals (using :,.0f)
+        assert '.' not in summary.split('$')[1].split()[0] or 'x' in summary.split('$')[1].split()[0]
