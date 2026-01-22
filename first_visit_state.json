@@ -1,6 +1,6 @@
 {
-  "tour_completed": false,
+  "tour_completed": true,
   "tour_skipped": false,
-  "current_step": 3,
+  "current_step": 6,
   "tooltips_dismissed": []
 }
