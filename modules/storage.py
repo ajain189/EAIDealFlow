@@ -10,6 +10,8 @@ import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
+from modules.error_handler import get_user_friendly_message
+
 STORAGE_FILE = "dealflow_history.json"
 STATS_FILE = "dealflow_stats.json"
 
@@ -20,15 +22,24 @@ def _load_storage() -> Dict[str, Any]:
         try:
             with open(STORAGE_FILE, 'r') as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except json.JSONDecodeError:
+            print(get_user_friendly_message("storage", "file_corrupted"))
+            return {"entries": [], "archived": []}
+        except IOError:
+            print(get_user_friendly_message("storage", "load_failed"))
             return {"entries": [], "archived": []}
     return {"entries": [], "archived": []}
 
 
-def _save_storage(data: Dict[str, Any]) -> None:
-    """Save storage to file."""
-    with open(STORAGE_FILE, 'w') as f:
-        json.dump(data, f, indent=2, default=str)
+def _save_storage(data: Dict[str, Any]) -> bool:
+    """Save storage to file. Returns True on success, False on failure."""
+    try:
+        with open(STORAGE_FILE, 'w') as f:
+            json.dump(data, f, indent=2, default=str)
+        return True
+    except IOError:
+        print(get_user_friendly_message("storage", "save_failed"))
+        return False
 
 
 def _generate_id(company_name: str, timestamp: str) -> str:

@@ -23,6 +23,9 @@ from modules.first_visit import (
     is_first_visit, get_current_tooltip, advance_tooltip,
     skip_tour, get_tour_progress, reset_tour
 )
+from modules.error_handler import (
+    get_user_friendly_message, format_error_for_display
+)
 
 # ===== PAGE CONFIG =====
 st.set_page_config(
@@ -43,6 +46,10 @@ def load_data():
 
 
 df = load_data()
+
+# Show warning if no data loaded
+if df.empty:
+    st.warning(get_user_friendly_message("data", "no_csv_files"))
 
 # Auto-archive old entries on startup
 auto_archive_old_entries(config.get('auto_archive_days', 90))
@@ -829,7 +836,7 @@ with col2:
                         st.success(f"Report saved! (ID: {entry_id[:8]}...)")
 
                     except Exception as e:
-                        st.error(f"PDF generation failed: {str(e)}")
+                        st.error(format_error_for_display(e))
     else:
         st.info("👈 Enter company details in the sidebar to generate outreach strategy.")
 

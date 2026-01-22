@@ -8,6 +8,8 @@ import numpy as np
 from pathlib import Path
 from typing import List
 
+from modules.error_handler import get_user_friendly_message
+
 # Column mapping: raw variations -> normalized name
 COLUMN_MAP = {
     'sde_margin': ['SDE %', 'SDE_Margin', 'SDE Margin'],
@@ -220,12 +222,12 @@ def load_all_csvs(data_dir: str = "data") -> pd.DataFrame:
     data_path = Path(data_dir)
 
     if not data_path.exists():
-        print(f"Warning: Data directory '{data_dir}' does not exist")
+        print(get_user_friendly_message("data", "no_data_directory"))
         return pd.DataFrame()
 
     csv_files = list(data_path.glob("*.csv"))
     if not csv_files:
-        print(f"Warning: No CSV files found in '{data_dir}'")
+        print(get_user_friendly_message("data", "no_csv_files"))
         return pd.DataFrame()
 
     for csv_file in csv_files:
@@ -234,8 +236,10 @@ def load_all_csvs(data_dir: str = "data") -> pd.DataFrame:
             df['source_file'] = csv_file.stem  # Track source for industry fallback
             all_dfs.append(df)
             print(f"Loaded {len(df)} rows from {csv_file.name}")
-        except Exception as e:
-            print(f"Error loading {csv_file}: {e}")
+        except Exception:
+            print(get_user_friendly_message(
+                "data", "csv_load_failed", filename=csv_file.name
+            ))
 
     if not all_dfs:
         return pd.DataFrame()

@@ -10,6 +10,8 @@ import tempfile
 import os
 from typing import List, Tuple
 
+from modules.error_handler import get_user_friendly_message
+
 
 class DealFlowPDF(FPDF):
     """Custom PDF class with EAI Capital branding."""
@@ -137,8 +139,8 @@ def generate_one_pager(
             # Clean up temp file
             os.unlink(tmp_path)
 
-        except Exception as e:
-            print(f"Chart export failed: {e}")
+        except Exception:
+            print(get_user_friendly_message("pdf", "chart_export_failed"))
             pdf.set_font('Helvetica', 'I', 10)
             pdf.set_text_color(128, 128, 128)
             pdf.cell(0, 8, '[Market position chart - see attached analysis]',

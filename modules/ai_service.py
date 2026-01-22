@@ -9,6 +9,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, List
 from dotenv import load_dotenv
 
+from modules.error_handler import get_user_friendly_message
+
 load_dotenv()
 
 # Global client - initialized lazily
@@ -21,16 +23,18 @@ def _get_client():
     global _client
     if _client is None:
         api_key = os.getenv("GEMINI_API_KEY")
-        if api_key:
-            try:
-                from google import genai
-                _client = genai.Client(api_key=api_key)
-            except ImportError:
-                print("Warning: google-genai not installed. AI features disabled.")
-                return None
-            except Exception as e:
-                print(f"Warning: Failed to initialize Gemini client: {e}")
-                return None
+        if not api_key:
+            print(get_user_friendly_message("ai_service", "api_key_missing"))
+            return None
+        try:
+            from google import genai
+            _client = genai.Client(api_key=api_key)
+        except ImportError:
+            print(get_user_friendly_message("ai_service", "api_key_missing"))
+            return None
+        except Exception:
+            print(get_user_friendly_message("ai_service", "api_connection_failed"))
+            return None
     return _client
 
 
@@ -56,10 +60,14 @@ def _call_with_retry(prompt: str, max_retries: int = 3) -> Optional[str]:
         except Exception as e:
             if attempt < max_retries - 1:
                 wait_time = (2 ** attempt) + 1  # 1s, 3s, 5s
-                print(f"Gemini API attempt {attempt + 1} failed, retrying in {wait_time}s...")
+                error_str = str(e).lower()
+                if "rate" in error_str or "quota" in error_str:
+                    print(get_user_friendly_message("ai_service", "api_rate_limited"))
+                else:
+                    print(f"Retrying... (attempt {attempt + 1} of {max_retries})")
                 time.sleep(wait_time)
             else:
-                print(f"Gemini API failed after {max_retries} attempts: {e}")
+                print(get_user_friendly_message("ai_service", "generation_failed"))
                 return None
     return None
 
@@ -331,8 +339,8 @@ def generate_emails(
             key = futures[future]
             try:
                 results[key] = future.result()
-            except Exception as e:
-                print(f"Error generating {key} email: {e}")
+            except Exception:
+                print(get_user_friendly_message("ai_service", "generation_failed"))
                 results[key] = {
                     'subject': f'Follow-up - {company_name}',
                     'body': '[Email generation failed. Please write manually.]'

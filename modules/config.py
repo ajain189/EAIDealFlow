@@ -6,6 +6,8 @@ Handles admin settings with auto-save and reset to defaults.
 import json
 import os
 
+from modules.error_handler import get_user_friendly_message
+
 CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {
@@ -50,15 +52,24 @@ def load_config() -> dict:
                 saved = json.load(f)
                 # Merge with defaults to ensure all keys exist
                 return {**DEFAULT_CONFIG, **saved}
-        except (json.JSONDecodeError, IOError):
+        except json.JSONDecodeError:
+            print(get_user_friendly_message("config", "invalid_format"))
+            return DEFAULT_CONFIG.copy()
+        except IOError:
+            print(get_user_friendly_message("config", "load_failed"))
             return DEFAULT_CONFIG.copy()
     return DEFAULT_CONFIG.copy()
 
 
-def save_config(config: dict) -> None:
-    """Auto-save config to file."""
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=2)
+def save_config(config: dict) -> bool:
+    """Auto-save config to file. Returns True on success, False on failure."""
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+        return True
+    except IOError:
+        print(get_user_friendly_message("config", "save_failed"))
+        return False
 
 
 def reset_to_defaults() -> dict:
