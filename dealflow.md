@@ -1567,10 +1567,10 @@ ERROR_MESSAGES = {
 - [x] Valuation range calculation
 - [x] Email generation (all 3 tones)
 - [x] PDF generation with all sections
-- [ ] History save/load/delete
-- [ ] Admin settings auto-save
-- [ ] First-visit tooltip display
-- [ ] Copy-to-clipboard functionality
+- [x] History save/load/delete
+- [x] Admin settings auto-save
+- [x] First-visit tooltip display
+- [x] Copy-to-clipboard functionality
 
 ---
 
@@ -1620,13 +1620,13 @@ All CSVs in `data/` should have these columns (names may vary):
 
 ## Task Checklist for Ralph
 
-- [ ] **Task 1:** Create folder structure + config.py
-- [ ] **Task 2:** Build `data_ingestion.py` (CSV load, normalize, peer filter, industry detect)
-- [ ] **Task 3:** Build `scoring.py` (Deal Heat with configurable thresholds)
-- [ ] **Task 4:** Build `visualization.py` (Plotly chart with IQR band)
-- [ ] **Task 5:** Build `ai_service.py` (Gemini with retry, parallel emails, tone selector)
-- [ ] **Task 6:** Build `pdf_generator.py` (fpdf2 one-pager)
-- [ ] **Task 7:** Build `storage.py` (local JSON history, stats, auto-archive)
-- [ ] **Task 8:** Build `app.py` (full Streamlit app with all features)
-- [ ] **Task 9:** Add error handling with user-friendly messages
-- [ ] **Task 10:** Test full flow with sample data
+- [x] **Task 1:** Create folder structure + config.py
+- [x] **Task 2:** Build `data_ingestion.py` (CSV load, normalize, peer filter, industry detect)
+- [x] **Task 3:** Build `scoring.py` (Deal Heat with configurable thresholds)
+- [x] **Task 4:** Build `visualization.py` (Plotly chart with IQR band)
+- [x] **Task 5:** Build `ai_service.py` (Gemini with retry, parallel emails, tone selector)
+- [x] **Task 6:** Build `pdf_generator.py` (fpdf2 one-pager)
+- [x] **Task 7:** Build `storage.py` (local JSON history, stats, auto-archive)
+- [x] **Task 8:** Build `app.py` (full Streamlit app with all features)
+- [x] **Task 9:** Add error handling with user-friendly messages
+- [x] **Task 10:** Test full flow with sample data
