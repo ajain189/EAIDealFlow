@@ -11,7 +11,7 @@ from modules.ai_service import scrape_website_summary, generate_emails, generate
 from modules.pdf_generator import generate_one_pager
 from modules.storage import (
     save_entry, get_all_entries, get_pdf_bytes,
-    delete_entry, delete_entries, auto_archive_old_entries,
+    delete_entries, auto_archive_old_entries,
     increment_stat, get_stats
 )
 from modules.clipboard import (
@@ -515,11 +515,11 @@ with st.sidebar:
 
         # Auto-save on change - check all settings
         settings_changed = (
-            new_rev_min != dh.get('revenue_min') or
-            new_rev_max != dh.get('revenue_max') or
-            new_peer_thresh != dh.get('peer_threshold') or
-            new_margin_thresh != dh.get('margin_threshold') or
-            new_auto_archive != config.get('auto_archive_days', 90)
+            new_rev_min != dh.get('revenue_min')
+            or new_rev_max != dh.get('revenue_max')
+            or new_peer_thresh != dh.get('peer_threshold')
+            or new_margin_thresh != dh.get('margin_threshold')
+            or new_auto_archive != config.get('auto_archive_days', 90)
         )
 
         if settings_changed:
