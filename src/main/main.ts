@@ -5,7 +5,7 @@ import * as fs from 'fs';
 // Use dynamic import for electron-store (ES Module)
 let Store: any;
 
-const isDev = process.env.NODE_ENV !== 'production' || !app.isPackaged;
+const isDev = !app.isPackaged;
 
 let mainWindow: BrowserWindow | null = null;
 let store: any = null;
@@ -14,11 +14,15 @@ async function initStore() {
   const StoreModule = await import('electron-store');
   Store = StoreModule.default;
   store = new Store({
-    name: 'dealflow-data',
+    name: 'eai-dealflow-data',
     defaults: {
       history: [],
-      settings: {
-        apiKey: 'AIzaSyCprbttLpBkPX0EeQU56BbRpG4x7flRpSc',
+      userSettings: {
+        userName: '',
+        defaultTone: 'formal',
+        companyName: 'EAI Capital',
+        aiProvider: 'openrouter',
+        apiKey: '',
       },
     },
   });
@@ -41,16 +45,22 @@ function createWindow() {
     show: false,
   });
 
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('Failed to load:', errorCode, errorDescription);
+  });
+
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
   });
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
-    // Uncomment for dev tools:
-    // mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    const indexPath = path.join(__dirname, '../renderer/index.html');
+    console.log('Loading production file:', indexPath);
+    mainWindow.loadFile(indexPath).catch(err => {
+      console.error('Failed to load index.html:', err);
+    });
   }
 
   mainWindow.on('closed', () => {
@@ -169,8 +179,8 @@ ipcMain.handle('ai:call', async (_, config: { provider: string; apiKey: string; 
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://dealflow-terminal.app',
-          'X-Title': 'DealFlow Terminal',
+          'HTTP-Referer': 'https://eai-dealflow.app',
+          'X-Title': 'EAI DealFlow',
         },
         body: JSON.stringify({
           model: DEFAULT_MODELS.openrouter,
