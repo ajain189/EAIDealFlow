@@ -1,6 +1,6 @@
 {
-  "name": "dealflow-terminal",
-  "version": "2.0.0",
+  "name": "eai-dealflow",
+  "version": "1.0.0",
   "description": "AI-powered company research and outreach generator for investment analysts",
   "main": "dist/main/main.js",
   "author": "EAI Capital",
@@ -38,7 +38,7 @@
   },
   "build": {
     "appId": "com.eai.dealflow",
-    "productName": "DealFlow Terminal",
+    "productName": "EAI DealFlow",
     "directories": {
       "output": "release"
     },
